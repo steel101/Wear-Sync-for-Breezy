@@ -2,6 +2,7 @@ package com.example.breezyweatherwearossync.wear
 
 import android.content.Context
 import android.util.Log
+import com.example.breezyweatherwearossync.WeatherUtils
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.tasks.await
@@ -34,54 +35,54 @@ object WearSyncHelper {
             val current = json.optJSONObject("current") ?: json
             
             // Extract unit string directly from data
-            val unitStr = (deepSearchString(json, "unit") ?: "f").uppercase()
+            val unitStr = (WeatherUtils.deepSearchString(json, "unit") ?: "f").uppercase()
             val fullUnit = "°$unitStr"
 
             // 1. Current Weather (As-Is)
-            val currentTemp = deepSearchDouble(current, "temperature")
+            val currentTemp = WeatherUtils.deepSearchDouble(current, "temperature")
             
             dataMap.putString("city", city)
             dataMap.putString("temp", currentTemp?.let { "${it.toInt()}$fullUnit" } ?: "--")
-            dataMap.putString("condition", deepSearchString(current, "weatherText") ?: deepSearchString(current, "condition") ?: "--")
-            dataMap.putString("cond_icon", toEmoji(deepSearchString(current, "weatherCode") ?: ""))
+            dataMap.putString("condition", WeatherUtils.deepSearchString(current, "weatherText") ?: WeatherUtils.deepSearchString(current, "condition") ?: "--")
+            dataMap.putString("cond_icon", WeatherUtils.toEmoji(WeatherUtils.deepSearchString(current, "weatherCode")))
             dataMap.putLong("timestamp", System.currentTimeMillis())
             dataMap.putLong("salt", System.nanoTime())
 
             // 2. Detailed Data
-            val feelsLike = deepSearchDouble(current, "sourceFeelsLike") ?: deepSearchDouble(current, "computedApparent") ?: deepSearchDouble(current, "apparentTemperature")
+            val feelsLike = WeatherUtils.deepSearchDouble(current, "sourceFeelsLike") ?: WeatherUtils.deepSearchDouble(current, "computedApparent") ?: WeatherUtils.deepSearchDouble(current, "apparentTemperature")
             dataMap.putString("feels_like", feelsLike?.let { "${it.toInt()}$fullUnit" } ?: "--")
             
-            val humidity = deepSearchInt(current, "relativeHumidity") ?: deepSearchInt(current, "humidity")
+            val humidity = WeatherUtils.deepSearchInt(current, "relativeHumidity") ?: WeatherUtils.deepSearchInt(current, "humidity")
             dataMap.putString("humidity", humidity?.let { "$it%" } ?: "--")
 
-            val pressure = deepSearchDouble(current, "pressure")
+            val pressure = WeatherUtils.deepSearchDouble(current, "pressure")
             dataMap.putString("pressure", pressure?.let { 
                 if (it < 50) String.format("%.2f inHg", it) else "${it.toInt()} hPa" 
             } ?: "--")
 
-            val uv = deepSearchDouble(current, "uV") ?: deepSearchDouble(current, "uvIndex")
+            val uv = WeatherUtils.deepSearchDouble(current, "uV") ?: WeatherUtils.deepSearchDouble(current, "uvIndex")
             dataMap.putString("uv", uv?.let { String.format("%.1f", it) } ?: "--")
 
-            val visibility = deepSearchDouble(current, "visibility")
+            val visibility = WeatherUtils.deepSearchDouble(current, "visibility")
             dataMap.putString("visibility", visibility?.let { 
-                val vUnit = deepSearchString(current.optJSONObject("visibility"), "unit") ?: "mi"
+                val vUnit = WeatherUtils.deepSearchString(current.optJSONObject("visibility"), "unit") ?: "mi"
                 "${it.toInt()} $vUnit"
             } ?: "--")
             
-            val dewPoint = deepSearchDouble(current, "dewPoint")
+            val dewPoint = WeatherUtils.deepSearchDouble(current, "dewPoint")
             dataMap.putString("dew_point", dewPoint?.let { "${it.toInt()}$fullUnit" } ?: "--")
             
-            val rainChance = deepSearchInt(current, "precipitationProbability") ?: deepSearchInt(json.optJSONArray("hourly")?.optJSONObject(0), "precipitationProbability")
+            val rainChance = WeatherUtils.deepSearchInt(current, "precipitationProbability") ?: WeatherUtils.deepSearchInt(json.optJSONArray("hourly")?.optJSONObject(0), "precipitationProbability")
             dataMap.putString("precip_prob", rainChance?.let { "$it%" } ?: "--")
             
-            val aqi = deepSearchInt(current, "airQuality") ?: deepSearchInt(current, "aqi")
+            val aqi = WeatherUtils.deepSearchInt(current, "airQuality") ?: WeatherUtils.deepSearchInt(current, "aqi")
             dataMap.putString("aqi", aqi?.toString() ?: "--")
 
             val windObj = current.optJSONObject("wind")
-            val windSpeed = deepSearchDouble(windObj, "speed")
-            val windUnit = deepSearchString(windObj?.optJSONObject("speed"), "unit") ?: "mph"
+            val windSpeed = WeatherUtils.deepSearchDouble(windObj, "speed")
+            val windUnit = WeatherUtils.deepSearchString(windObj?.optJSONObject("speed"), "unit") ?: "mph"
             dataMap.putString("wind", windSpeed?.let { "${it.toInt()} $windUnit" } ?: "--")
-            dataMap.putDouble("wind_dir", deepSearchDouble(windObj, "degree") ?: deepSearchDouble(windObj, "direction") ?: 0.0)
+            dataMap.putDouble("wind_dir", WeatherUtils.deepSearchDouble(windObj, "degree") ?: WeatherUtils.deepSearchDouble(windObj, "direction") ?: 0.0)
 
             // 3. Daily Forecast (As-Is)
             val daily = json.optJSONArray("daily") ?: findArray(json, "daily")
@@ -90,21 +91,21 @@ object WearSyncHelper {
                 dataMap.putInt("fc_count", count)
                 
                 val firstDay = daily.getJSONObject(0)
-                val rMax = deepSearchDouble(firstDay.optJSONObject("day"), "temperature") ?: deepSearchDouble(firstDay, "max")
-                val rMin = deepSearchDouble(firstDay.optJSONObject("night"), "temperature") ?: deepSearchDouble(firstDay, "min")
+                val rMax = WeatherUtils.deepSearchDouble(firstDay.optJSONObject("day"), "temperature") ?: WeatherUtils.deepSearchDouble(firstDay, "max")
+                val rMin = WeatherUtils.deepSearchDouble(firstDay.optJSONObject("night"), "temperature") ?: WeatherUtils.deepSearchDouble(firstDay, "min")
                 
                 dataMap.putString("temp_max", rMax?.let { "${it.toInt()}°" } ?: "--")
                 dataMap.putString("temp_min", rMin?.let { "${it.toInt()}°" } ?: "--")
 
                 for (i in 0 until count) {
                     val d = daily.getJSONObject(i)
-                    val rDMax = deepSearchDouble(d.optJSONObject("day"), "temperature") ?: deepSearchDouble(d, "max")
-                    val rDMin = deepSearchDouble(d.optJSONObject("night"), "temperature") ?: deepSearchDouble(d, "min")
+                    val rDMax = WeatherUtils.deepSearchDouble(d.optJSONObject("day"), "temperature") ?: WeatherUtils.deepSearchDouble(d, "max")
+                    val rDMin = WeatherUtils.deepSearchDouble(d.optJSONObject("night"), "temperature") ?: WeatherUtils.deepSearchDouble(d, "min")
                     
                     dataMap.putString("fc_day_$i", extractDate(d))
                     dataMap.putString("fc_max_$i", rDMax?.let { "${it.toInt()}°" } ?: "--")
                     dataMap.putString("fc_min_$i", rDMin?.let { "${it.toInt()}°" } ?: "--")
-                    dataMap.putString("fc_icon_$i", toEmoji(deepSearchString(d.optJSONObject("day"), "weatherCode") ?: deepSearchString(d, "weatherCode") ?: ""))
+                    dataMap.putString("fc_icon_$i", WeatherUtils.toEmoji(WeatherUtils.deepSearchString(d.optJSONObject("day"), "weatherCode") ?: WeatherUtils.deepSearchString(d, "weatherCode")))
                 }
             }
 
@@ -144,7 +145,7 @@ object WearSyncHelper {
                     dataMap.putString("h_time_$i", extractTime(hour))
                     val hT = findDouble(hour, "temperature")
                     dataMap.putString("h_temp_$i", hT?.let { "${it.toInt()}°" } ?: "--")
-                    dataMap.putString("h_cond_icon_$i", toEmoji(findString(hour, "weatherCode") ?: ""))
+                    dataMap.putString("h_cond_icon_$i", WeatherUtils.toEmoji(findString(hour, "weatherCode")))
                 }
             }
 
@@ -155,53 +156,17 @@ object WearSyncHelper {
             nodes.forEach { node ->
                 Wearable.getMessageClient(context).sendMessage(node.id, PATH_FORCE_UPDATE, byteArrayOf(1)).await()
             }
+            
+            // Save last sync time
+            context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putLong("last_sync_time", System.currentTimeMillis())
+                .apply()
+
             Log.d(TAG, "Sync complete for $city (Unit=$unitStr)")
         } catch (e: Exception) {
             Log.e(TAG, "Sync failed", e)
         }
-    }
-
-    private fun deepSearchDouble(obj: JSONObject?, key: String): Double? {
-        if (obj == null) return null
-        if (obj.has(key)) {
-            val v = obj.opt(key)
-            if (v is Number) return v.toDouble()
-            if (v is String) return v.toDoubleOrNull()
-            if (v is JSONObject) return deepSearchDouble(v, "value") ?: deepSearchDouble(v, "temperature") ?: deepSearchDouble(v, "total")
-        }
-        val keys = obj.keys()
-        while (keys.hasNext()) {
-            val k = keys.next()
-            if (k == "pollutants" || k == "normals") continue
-            val child = obj.optJSONObject(k)
-            if (child != null) {
-                val found = deepSearchDouble(child, key)
-                if (found != null) return found
-            }
-        }
-        return null
-    }
-
-    private fun deepSearchInt(obj: JSONObject?, key: String): Int? = deepSearchDouble(obj, key)?.toInt()
-
-    private fun deepSearchString(obj: JSONObject?, key: String): String? {
-        if (obj == null) return null
-        if (obj.has(key)) {
-            val v = obj.opt(key)
-            if (v is String && v != "null" && v.isNotEmpty()) return v
-            if (v is JSONObject) return deepSearchString(v, "value") ?: deepSearchString(v, "text") ?: deepSearchString(v, "unit")
-        }
-        val keys = obj.keys()
-        while (keys.hasNext()) {
-            val k = keys.next()
-            if (k == "pollutants" || k == "normals") continue
-            val child = obj.optJSONObject(k)
-            if (child != null) {
-                val found = deepSearchString(child, key)
-                if (found != null) return found
-            }
-        }
-        return null
     }
 
     private fun findArray(json: JSONObject, keyword: String): JSONArray? {
@@ -287,18 +252,5 @@ object WearSyncHelper {
         }
         if (v is String && v.isNotEmpty() && v != "null") return v
         return null
-    }
-
-    private fun toEmoji(code: String): String {
-        val c = code.lowercase()
-        return when {
-            c.contains("clear") -> "☀️"
-            c.contains("cloudy") || c.contains("clouds") -> "⛅"
-            c.contains("overcast") || c.contains("fog") || c.contains("mist") -> "☁️"
-            c.contains("rain") || c.contains("drizzle") || c.contains("shower") -> "🌧️"
-            c.contains("thunder") || c.contains("tstorm") -> "⛈️"
-            c.contains("snow") || c.contains("sleet") || c.contains("ice") -> "❄️"
-            else -> "☀️"
-        }
     }
 }

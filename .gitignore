@@ -17,3 +17,5 @@ local.properties
 app/build/
 wear/build/
 *.apk
+wear\release
+app\release
