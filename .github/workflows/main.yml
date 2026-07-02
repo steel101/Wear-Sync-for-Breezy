@@ -1,0 +1,42 @@
+name: Build Android APKs
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APKs
+        # Note: This will build unsigned APKs since no signing config is present in your build.gradle
+        run: ./gradlew assembleRelease
+
+      - name: Upload Phone APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: phone-app-release
+          path: app/build/outputs/apk/release/*.apk
+
+      - name: Upload Watch APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: watch-app-release
+          path: wear/build/outputs/apk/release/*.apk
