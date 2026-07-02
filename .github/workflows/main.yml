@@ -23,7 +23,7 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      # FIX: Force-install the old build-tools version the signing action requires
+      # FIX: Pre-install the old build-tools version the signing action forces
       - name: Install Android Build Tools 29.0.3
         run: |
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;29.0.3"
