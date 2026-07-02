@@ -1,5 +1,34 @@
+name: Build Android APKs
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APKs
+        run: ./gradlew assembleRelease
+
       # Sign the Phone APK
-        name: Sign Phone APK
+      - name: Sign Phone APK
         uses: r0adkll/sign-android-release@v1
         id: sign_phone
         with:
@@ -8,7 +37,7 @@
           alias: ${{ secrets.ANDROID_KEY_ALIAS }}
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          buildToolsVersion: "34.0.0" # Added to find zipalign correctly
+          buildToolsVersion: "34.0.0"
 
       # Sign the Watch APK
       - name: Sign Watch APK
@@ -20,4 +49,16 @@
           alias: ${{ secrets.ANDROID_KEY_ALIAS }}
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          buildToolsVersion: "34.0.0" # Added to find zipalign correctly
+          buildToolsVersion: "34.0.0"
+
+      - name: Upload Signed Phone APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: phone-app-release
+          path: ${{ steps.sign_phone.outputs.signedReleaseFile }}
+
+      - name: Upload Signed Watch APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: watch-app-release
+          path: ${{ steps.sign_watch.outputs.signedReleaseFile }}
