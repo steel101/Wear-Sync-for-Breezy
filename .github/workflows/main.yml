@@ -5,7 +5,6 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
@@ -26,17 +25,38 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Release APKs
-        # Note: This will build unsigned APKs since no signing config is present in your build.gradle
         run: ./gradlew assembleRelease
 
-      - name: Upload Phone APK
+      # Sign the Phone APK
+      - name: Sign Phone APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_phone
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      # Sign the Watch APK
+      - name: Sign Watch APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_watch
+        with:
+          releaseDirectory: wear/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload Signed Phone APK
         uses: actions/upload-artifact@v4
         with:
           name: phone-app-release
-          path: app/build/outputs/apk/release/*.apk
+          path: ${{ steps.sign_phone.outputs.signedReleaseFile }}
 
-      - name: Upload Watch APK
+      - name: Upload Signed Watch APK
         uses: actions/upload-artifact@v4
         with:
           name: watch-app-release
-          path: wear/build/outputs/apk/release/*.apk
+          path: ${{ steps.sign_watch.outputs.signedReleaseFile }}
