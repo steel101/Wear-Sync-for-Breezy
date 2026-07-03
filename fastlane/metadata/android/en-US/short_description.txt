@@ -1,1 +1,1 @@
-breezy weather phone app to sync data to wear os watch 
+Wear Sync for Breezy is a phone app to pull weather data from breezy weather app and sync it to your paired wear os watch with tiles and app
