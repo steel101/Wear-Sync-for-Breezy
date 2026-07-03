@@ -1,4 +1,4 @@
-// Top-level build file where you can add
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
 android {
     dependenciesInfo {
         // Disables dependency metadata when building APKs (for IzzyOnDroid/F-Droid)
@@ -7,7 +7,7 @@ android {
         includeInBundle = false
     }
 }
-configuration options common to all sub-projects/modules.
+
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.compose) apply false
