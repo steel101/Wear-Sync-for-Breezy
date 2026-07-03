@@ -27,6 +27,4 @@
     <string name="complication_feels_like_label">Feels Like</string>
     <string name="complication_rain_chance_label">Rain Chance</string>
     <string name="complication_wind_label">Wind</string>
-    <string name="tile_radar_label">Radar</string>
-    <string name="tile_radar_description">Show current weather radar image.</string>
 </resources>
