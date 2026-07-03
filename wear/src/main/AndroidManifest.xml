@@ -16,7 +16,7 @@
             android:value="true" />
 
         <activity
-            android:name="com.example.breezyweatherwearossync.MainActivity"
+            android:name="com.steel101.wearsyncforbreezy.MainActivity"
             android:exported="true"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
             <intent-filter>
@@ -26,7 +26,7 @@
         </activity>
 
         <activity
-            android:name="com.example.breezyweatherwearossync.TilePreviewActivity"
+            android:name="com.steel101.wearsyncforbreezy.TilePreviewActivity"
             android:exported="true"
             android:label="Tile Previews"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
@@ -37,7 +37,7 @@
         </activity>
 
         <service
-            android:name="com.example.breezyweatherwearossync.WeatherTileService"
+            android:name="com.steel101.wearsyncforbreezy.WeatherTileService"
             android:exported="true"
             android:label="Weather"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
@@ -50,7 +50,7 @@
         </service>
 
         <service
-            android:name="com.example.breezyweatherwearossync.HourlyTileService"
+            android:name="com.steel101.wearsyncforbreezy.HourlyTileService"
             android:exported="true"
             android:label="Hourly Forecast"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
@@ -63,7 +63,7 @@
         </service>
 
         <service
-            android:name="com.example.breezyweatherwearossync.DailyTileService"
+            android:name="com.steel101.wearsyncforbreezy.DailyTileService"
             android:exported="true"
             android:label="Daily Forecast"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
@@ -76,7 +76,7 @@
         </service>
 
         <service
-            android:name="com.example.breezyweatherwearossync.AtmosphereTileService"
+            android:name="com.steel101.wearsyncforbreezy.AtmosphereTileService"
             android:exported="true"
             android:label="Atmosphere"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
@@ -89,7 +89,7 @@
         </service>
 
         <service
-            android:name="com.example.breezyweatherwearossync.AirQualityTileService"
+            android:name="com.steel101.wearsyncforbreezy.AirQualityTileService"
             android:exported="true"
             android:label="Air Quality"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
@@ -102,7 +102,7 @@
         </service>
 
         <service
-            android:name="com.example.breezyweatherwearossync.UVTileService"
+            android:name="com.steel101.wearsyncforbreezy.UVTileService"
             android:exported="true"
             android:label="UV Index"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
@@ -115,7 +115,7 @@
         </service>
 
         <service
-            android:name="com.example.breezyweatherwearossync.PrecipitationTileService"
+            android:name="com.steel101.wearsyncforbreezy.PrecipitationTileService"
             android:exported="true"
             android:label="Precipitation"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
@@ -128,7 +128,7 @@
         </service>
 
         <service
-            android:name="com.example.breezyweatherwearossync.WindTileService"
+            android:name="com.steel101.wearsyncforbreezy.WindTileService"
             android:exported="true"
             android:label="Wind"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
@@ -141,7 +141,7 @@
         </service>
 
         <service
-            android:name="com.example.breezyweatherwearossync.AlertsTileService"
+            android:name="com.steel101.wearsyncforbreezy.AlertsTileService"
             android:exported="true"
             android:label="Weather Alerts"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
@@ -218,7 +218,7 @@
         </service>
 
         <service
-            android:name="com.example.breezyweatherwearossync.WearDataListenerService"
+            android:name="com.steel101.wearsyncforbreezy.WearDataListenerService"
             android:exported="true"
             tools:ignore="ExportedService">
             <intent-filter>
