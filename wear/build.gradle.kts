@@ -7,6 +7,13 @@ android {
     namespace = "com.example.breezyweatherwearossync"
     compileSdk = 37
 
+    dependenciesInfo {
+        // Disables dependency metadata when building APKs (for IzzyOnDroid/F-Droid)
+        includeInApk = false
+        // Disables dependency metadata when building Android App Bundles (for Google Play)
+        includeInBundle = false
+    }
+
     defaultConfig {
         applicationId = "com.example.breezyweatherwearossync"
         minSdk = 26
@@ -42,7 +49,7 @@ dependencies {
     implementation("androidx.wear.protolayout:protolayout-material:1.2.1")
     implementation("androidx.wear.watchface:watchface-complications-data-source:1.2.1")
     implementation("androidx.wear.watchface:watchface-complications-data:1.2.1")
-    
+
     implementation("androidx.wear.compose:compose-material:1.4.1")
     implementation("androidx.wear.compose:compose-foundation:1.4.1")
 
@@ -55,7 +62,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
-    
+
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     implementation("androidx.concurrent:concurrent-futures-ktx:1.2.0")
 
