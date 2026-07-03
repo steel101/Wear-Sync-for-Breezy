@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BreezeSync for Wear OS</string>
+    <string name="app_name">Wear Sync for Breezy</string>
     <string name="tile_label">Current Weather</string>
     <string name="tile_description">Show current weather from Local Weather app.</string>
     <string name="tile_hourly_label">Hourly Forecast</string>
