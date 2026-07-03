@@ -1,9 +1,11 @@
-# 🌤️ BreezeSync for Wear Wear os
+# ☀️ BreezeSync for Wear OS
+
 is a lightweight bridge application that seamlessly syncs detailed weather data from the [Breezy Weather Android app](https://github.com/breezy-weather/breezy-weather) to your Wear OS watch.
 
 ---
+## 🔍 What it does
 
-## 🔍 What It Breezy**Breezy Weather** is a fantastic open-source weather app, but it doesn't always have a native way to send its rich data to every Wear OS watch face or tile. This app acts as a secure, local **"sync bridge"**:
+**Breezy Weather** is a fantastic open-source weather app, but it doesn't always have a native way to send its rich data to every Wear OS watch face or tile. This app acts as a secure, local **"sync bridge"**:
 
 1. **Reads** weather data directly from Breezy Weather's internal database via a secure Content Provider.
 2. **Processes** current conditions, detailed metrics (UV, Humidity, Wind, etc.), and forecasts.
