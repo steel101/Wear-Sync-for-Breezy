@@ -42,6 +42,7 @@ Unit Support: Automatically detects and respects your preference for Celsius or 
 Installation & Setup
 1.
 Breezy Weather: Ensure you have Breezy Weather installed and configured on your phone.
+https://github.com/breezy-weather/breezy-weather
 2.
 Permissions: When you first open this sync app, tap "Fetch & Sync". It will request permission to read data from Breezy Weather.
 3.
