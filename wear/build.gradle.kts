@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.breezyweatherwearossync"
+    namespace = "com.steel101.wearsyncforbreezy"
     compileSdk = 37
 
     dependenciesInfo {
@@ -15,7 +15,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.breezyweatherwearossync"
+        applicationId = "com.steel101.wearsyncforbreezy"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
