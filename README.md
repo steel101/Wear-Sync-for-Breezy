@@ -1,10 +1,5 @@
 # 🌤️ Breezy Weather Wear OS Sync
 
-<p align="center">
-  <img src="https://shields.io" width="180" height="30" alt="Platform" />&nbsp;
-  <img src="https://shields.io" width="110" height="30" alt="License" />&nbsp;
-  <img src="https://shields.io" width="145" height="30" alt="Privacy" />
-</p>
 
 A lightweight bridge application that seamlessly syncs detailed weather data from the [Breezy Weather Android app](https://github.com/breezy-weather/breezy-weather) to your Wear OS watch.
 
