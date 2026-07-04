@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.steel101.wearsyncforbreezy"
-    compileSdk = 37
+    compileSdk = 35
 
     dependenciesInfo {
         // Disables dependency metadata when building APKs (for IzzyOnDroid/F-Droid)
@@ -16,7 +16,7 @@ android {
 
     defaultConfig {
         applicationId = "com.steel101.wearsyncforbreezy"
-        minSdk = 26
+        minSdk = 34
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.3"
