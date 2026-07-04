@@ -1,7 +1,6 @@
 plugins {
     id("com.android.library")
-    alias(libs.plugins.kotlin.android)
-    id("org.jetbrains.kotlin.plugin.serialization") // FIXED: Using direct ID string format
+    alias(libs.plugins.kotlin.android) // Uses the working, pre-mapped Kotlin core plugin
 }
 
 android {
@@ -24,6 +23,6 @@ android {
 
 dependencies {
     api(libs.breezy.datasharing)
-    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.serialization.json) // This handles your JSON code tasks perfectly!
     implementation("org.json:json:20250107")
 }
