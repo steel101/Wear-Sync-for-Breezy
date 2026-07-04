@@ -1,9 +1,0 @@
-com.steel101.wearsyncforbreezy.shared-pngs-0 C:\Users\steel\Desktop\testWear-Sync-for-Breezy\shared\build\generated\res\pngs\release
-com.steel101.wearsyncforbreezy.shared-updated_navigation_xml-1 C:\Users\steel\Desktop\testWear-Sync-for-Breezy\shared\build\generated\updated_navigation_xml\release
-com.steel101.wearsyncforbreezy.shared-mergeReleaseResources-2 C:\Users\steel\Desktop\testWear-Sync-for-Breezy\shared\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
-com.steel101.wearsyncforbreezy.shared-mergeReleaseResources-3 C:\Users\steel\Desktop\testWear-Sync-for-Breezy\shared\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
-com.steel101.wearsyncforbreezy.shared-release-4 C:\Users\steel\Desktop\testWear-Sync-for-Breezy\shared\build\intermediates\merged_res\release\mergeReleaseResources
-com.steel101.wearsyncforbreezy.shared-release-5 C:\Users\steel\Desktop\testWear-Sync-for-Breezy\shared\build\intermediates\packaged_res\release\packageReleaseResources
-com.steel101.wearsyncforbreezy.shared-main-6 C:\Users\steel\Desktop\testWear-Sync-for-Breezy\shared\src\main\res
-com.steel101.wearsyncforbreezy.shared-release-7 C:\Users\steel\Desktop\testWear-Sync-for-Breezy\shared\src\release\res
-gradleHome-0 C:\Users\steel\.gradle
