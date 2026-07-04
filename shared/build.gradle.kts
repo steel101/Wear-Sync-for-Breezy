@@ -1,6 +1,7 @@
 plugins {
     id("com.android.library")
-    alias(libs.plugins.kotlin.android) // FIXED: Replaces the missing serialization plugin path
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.plugin.serialization) 
 }
 
 android {
