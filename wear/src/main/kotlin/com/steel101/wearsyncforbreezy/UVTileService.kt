@@ -13,6 +13,7 @@ import androidx.wear.tiles.TileBuilders
 import androidx.wear.tiles.TileService
 import com.google.common.util.concurrent.ListenableFuture
 import androidx.concurrent.futures.ResolvableFuture
+import com.steel101.wearsyncforbreezy.WeatherUtils
 import java.util.Calendar
 
 class UVTileService : TileService() {
@@ -35,8 +36,8 @@ class UVTileService : TileService() {
             .build()
 
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        val isDay = hour in 6..18
-        val icon = if (isDay) "☀️" else "🌙"
+        val isNight = hour !in 6..18
+        val icon = WeatherUtils.toEmoji("clear", isNight)
 
         val rootColumn = LayoutElementBuilders.Column.Builder()
             .setModifiers(rootModifiers)

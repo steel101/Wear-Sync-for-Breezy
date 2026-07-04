@@ -38,7 +38,7 @@ object WearSyncHelper {
             dataMap.putString("city", location.customName ?: location.city)
             dataMap.putString("temp", currentTemp?.let { "${it.toInt()}$fullUnit" } ?: "--")
             dataMap.putString("condition", current?.weatherText ?: "--")
-            dataMap.putString("cond_icon", WeatherUtils.toEmoji(current?.weatherCode))
+            dataMap.putString("cond_icon", WeatherUtils.toEmoji(current?.weatherCode, isNight(System.currentTimeMillis())))
             dataMap.putLong("timestamp", System.currentTimeMillis())
             dataMap.putLong("salt", System.nanoTime())
 
@@ -116,7 +116,7 @@ object WearSyncHelper {
                     dataMap.putString("h_time_$i", extractTime(h.date))
                     val hT = h.temperature?.temperature?.value
                     dataMap.putString("h_temp_$i", hT?.let { "${it.toInt()}°" } ?: "--")
-                    dataMap.putString("h_cond_icon_$i", WeatherUtils.toEmoji(h.weatherCode))
+                    dataMap.putString("h_cond_icon_$i", WeatherUtils.toEmoji(h.weatherCode, isNight(h.date)))
                 }
             }
 
@@ -146,5 +146,12 @@ object WearSyncHelper {
         val cal = Calendar.getInstance()
         cal.timeInMillis = if (time < 10000000000L) time * 1000 else time
         return SimpleDateFormat("ha", Locale.getDefault()).format(cal.time).lowercase()
+    }
+
+    private fun isNight(time: Long): Boolean {
+        val cal = Calendar.getInstance()
+        cal.timeInMillis = if (time < 10000000000L) time * 1000 else time
+        val hour = cal.get(Calendar.HOUR_OF_DAY)
+        return hour !in 6..18
     }
 }

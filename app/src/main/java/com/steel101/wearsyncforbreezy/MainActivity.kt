@@ -130,7 +130,9 @@ fun WeatherInfoCard(location: BreezyLocation) {
     val current = location.weather?.current ?: return
     val temp = current.temperature?.temperature?.value
     val condition = current.weatherText ?: "Unknown"
-    val emoji = WeatherUtils.toEmoji(current.weatherCode)
+    val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+    val isNight = hour !in 6..18
+    val emoji = WeatherUtils.toEmoji(current.weatherCode, isNight)
     val unitStr = current.temperature?.temperature?.unit?.uppercase() ?: "F"
     val fullUnit = "°$unitStr"
 

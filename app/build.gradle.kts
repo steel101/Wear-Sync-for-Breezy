@@ -16,10 +16,10 @@ android {
 
     defaultConfig {
         applicationId = "com.steel101.wearsyncforbreezy"
-        minSdk = 34
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.27"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
