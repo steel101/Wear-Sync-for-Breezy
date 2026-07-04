@@ -1,12 +1,20 @@
 plugins {
     id("com.android.library")
-    alias(libs.plugins.kotlin.android)
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.22" 
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
     namespace = "com.steel101.wearsyncforbreezy.shared"
-    compileSdk = 35
+    compileSdk = 37
+
+    defaultConfig {
+        minSdk = 26
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
 }
 
 dependencies {
