@@ -1,23 +1,24 @@
 plugins {
     id("com.android.library")
+    id("org.jetbrains.kotlin.android") // ADDED: Crucial for kotlinOptions to work
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
     namespace = "com.steel101.wearsyncforbreezy.shared"
-    compileSdk = 35 
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 26
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17 
-        targetCompatibility = JavaVersion.VERSION_17 
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = "17" 
+        jvmTarget = "17"
     }
 }
 
