@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.steel101.wearsyncforbreezy"
-    compileSdk = 35
+    compileSdk = 37
 
     dependenciesInfo {
         // Disables dependency metadata when building APKs (for IzzyOnDroid/F-Droid)
@@ -16,10 +16,10 @@ android {
 
     defaultConfig {
         applicationId = "com.steel101.wearsyncforbreezy"
-        minSdk = 34
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0.3"
+        versionName = "1.0"
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -32,16 +32,10 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
-
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
     }
@@ -55,9 +49,10 @@ dependencies {
     implementation("androidx.wear.protolayout:protolayout-material:1.2.1")
     implementation("androidx.wear.watchface:watchface-complications-data-source:1.2.1")
     implementation("androidx.wear.watchface:watchface-complications-data:1.2.1")
+
     implementation("androidx.wear.compose:compose-material:1.4.1")
     implementation("androidx.wear.compose:compose-foundation:1.4.1")
-    
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -67,10 +62,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
-    
+
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     implementation("androidx.concurrent:concurrent-futures-ktx:1.2.0")
     implementation(project(":shared"))
-    
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
