@@ -1,6 +1,6 @@
 plugins {
     id("com.android.library")
-    id("org.jetbrains.kotlin.android") // ADDED: Crucial for kotlinOptions to work
+    alias(libs.plugins.kotlin.compose) // FIXED: Uses your pre-existing catalog alias
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
