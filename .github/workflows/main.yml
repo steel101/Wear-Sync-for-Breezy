@@ -25,8 +25,10 @@ jobs:
 
       - name: Install Android Build Tools
         run: |
-          # Automatically accepts licenses and downloads the Android 15 SDK tools
+          # Installs modern tools for your gradle build
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;35.0.0" "platforms;android-35"
+          # FIXED: Installs old tools strictly to satisfy the r0adkll signing action path requirements
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;29.0.3"
 
       - name: Make Gradle Executable
         run: chmod +x ./gradlew
@@ -46,7 +48,6 @@ jobs:
           alias: ${{ secrets.ANDROID_KEY_ALIAS }}
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          buildToolsVersion: 35.0.0 # FIXED: Forces the tool to find the modern build-tools path
 
       - name: Sign Watch APK
         id: sign_watch
@@ -57,7 +58,6 @@ jobs:
           alias: ${{ secrets.ANDROID_KEY_ALIAS }}
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          buildToolsVersion: 35.0.0 # FIXED: Forces the tool to find the modern build-tools path
 
       - name: Create GitHub Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
