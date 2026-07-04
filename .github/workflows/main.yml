@@ -3,15 +3,15 @@ name: Build Android APKs
 on:
   push:
     branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
   build:
+    name: Build & Sign APKs
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Required to allow the workflow to create a GitHub Release
+      contents: write
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -19,25 +19,29 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
+          distribution: 'zulu'
           java-version: '17'
-          distribution: 'temurin'
-          cache: gradle
+          cache: 'gradle'
 
-      # FIX: Pre-install the old build-tools version the signing action forces
-      - name: Install Android Build Tools 29.0.3
+      - name: Install Android Build Tools
         run: |
+          # Installs modern tools for your gradle build
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;35.0.0" "platforms;android-35"
+          # FIXED: Installs old tools strictly to satisfy the r0adkll signing action path requirements
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;29.0.3"
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Make Gradle Executable
+        run: chmod +x ./gradlew
 
-      - name: Build Release APKs
-        run: ./gradlew assembleRelease
+      - name: Build Phone Release APK (Unsigned)
+        run: ./gradlew :app:assembleRelease
 
-      # Sign the Phone APK
+      - name: Build Watch Release APK (Unsigned)
+        run: ./gradlew :wear:assembleRelease
+
       - name: Sign Phone APK
-        uses: r0adkll/sign-android-release@v1
         id: sign_phone
+        uses: r0adkll/sign-android-release@v1
         with:
           releaseDirectory: app/build/outputs/apk/release
           signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -45,10 +49,9 @@ jobs:
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      # Sign the Watch APK
       - name: Sign Watch APK
-        uses: r0adkll/sign-android-release@v1
         id: sign_watch
+        uses: r0adkll/sign-android-release@v1
         with:
           releaseDirectory: wear/build/outputs/apk/release
           signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -56,26 +59,15 @@ jobs:
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      - name: Upload Signed Phone APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: phone-app-release
-          path: ${{ steps.sign_phone.outputs.signedReleaseFile }}
-
-      - name: Upload Signed Watch APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: watch-app-release
-          path: ${{ steps.sign_watch.outputs.signedReleaseFile }}
-
-      # Automatically publish the APKs to the Main Repository Page
-      - name: Create GitHub Release
+      - name: Create GitHub Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
           name: Release Build v1.0.${{ github.run_number }}
+          tag_name: v1.0.${{ github.run_number }}
           draft: false
           prerelease: false
           files: |
             ${{ steps.sign_phone.outputs.signedReleaseFile }}
             ${{ steps.sign_watch.outputs.signedReleaseFile }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
