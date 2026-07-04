@@ -1,8 +1,20 @@
 <dependencies>
   <compile
-      roots="org.jetbrains.kotlin:kotlin-stdlib:2.2.10@jar,org.json:json:20250107@jar,org.jetbrains:annotations:13.0@jar">
+      roots="com.github.breezy-weather:breezy-weather-data-sharing-lib:09c0e4dd062601239c3f6062266d4b963577cefc@jar,com.github.breezy-weather.breezy-weather-data-sharing-lib:lib-android:09c0e4dd062601239c3f6062266d4b963577cefc@aar,com.github.breezy-weather.breezy-weather-data-sharing-lib:lib-android:09c0e4dd062601239c3f6062266d4b963577cefc@aar,org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.8.0@jar,org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.8.0@jar,org.jetbrains.kotlin:kotlin-stdlib:2.3.0@jar,org.json:json:20250107@jar,org.jetbrains:annotations:13.0@jar">
     <dependency
-        name="org.jetbrains.kotlin:kotlin-stdlib:2.2.10@jar"
+        name="com.github.breezy-weather:breezy-weather-data-sharing-lib:09c0e4dd062601239c3f6062266d4b963577cefc@jar"
+        simpleName="com.github.breezy-weather:breezy-weather-data-sharing-lib"/>
+    <dependency
+        name="com.github.breezy-weather.breezy-weather-data-sharing-lib:lib-android:09c0e4dd062601239c3f6062266d4b963577cefc@aar"
+        simpleName="com.github.breezy-weather.breezy-weather-data-sharing-lib:lib-android"/>
+    <dependency
+        name="org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.8.0@jar"
+        simpleName="org.jetbrains.kotlinx:kotlinx-serialization-core-jvm"/>
+    <dependency
+        name="org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.8.0@jar"
+        simpleName="org.jetbrains.kotlinx:kotlinx-serialization-json-jvm"/>
+    <dependency
+        name="org.jetbrains.kotlin:kotlin-stdlib:2.3.0@jar"
         simpleName="org.jetbrains.kotlin:kotlin-stdlib"/>
     <dependency
         name="org.json:json:20250107@jar"
@@ -12,9 +24,21 @@
         simpleName="org.jetbrains:annotations"/>
   </compile>
   <package
-      roots="org.jetbrains.kotlin:kotlin-stdlib:2.2.10@jar,org.json:json:20250107@jar,org.jetbrains:annotations:13.0@jar">
+      roots="com.github.breezy-weather:breezy-weather-data-sharing-lib:09c0e4dd062601239c3f6062266d4b963577cefc@jar,com.github.breezy-weather.breezy-weather-data-sharing-lib:lib-android:09c0e4dd062601239c3f6062266d4b963577cefc@aar,com.github.breezy-weather.breezy-weather-data-sharing-lib:lib-android:09c0e4dd062601239c3f6062266d4b963577cefc@aar,org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.10.0@jar,org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.10.0@jar,org.jetbrains.kotlin:kotlin-stdlib:2.3.0@jar,org.json:json:20250107@jar,org.jetbrains:annotations:13.0@jar">
     <dependency
-        name="org.jetbrains.kotlin:kotlin-stdlib:2.2.10@jar"
+        name="com.github.breezy-weather:breezy-weather-data-sharing-lib:09c0e4dd062601239c3f6062266d4b963577cefc@jar"
+        simpleName="com.github.breezy-weather:breezy-weather-data-sharing-lib"/>
+    <dependency
+        name="com.github.breezy-weather.breezy-weather-data-sharing-lib:lib-android:09c0e4dd062601239c3f6062266d4b963577cefc@aar"
+        simpleName="com.github.breezy-weather.breezy-weather-data-sharing-lib:lib-android"/>
+    <dependency
+        name="org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.10.0@jar"
+        simpleName="org.jetbrains.kotlinx:kotlinx-serialization-core-jvm"/>
+    <dependency
+        name="org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.10.0@jar"
+        simpleName="org.jetbrains.kotlinx:kotlinx-serialization-json-jvm"/>
+    <dependency
+        name="org.jetbrains.kotlin:kotlin-stdlib:2.3.0@jar"
         simpleName="org.jetbrains.kotlin:kotlin-stdlib"/>
     <dependency
         name="org.json:json:20250107@jar"

@@ -12,66 +12,68 @@ import com.steel101.wearsyncforbreezy.sync.WearSyncHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class WeatherUpdateService : Service() {
-    private val TAG = "WeatherUpdateService"
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var observer: ContentObserver? = null
-    private val handler = Handler(Looper.getMainLooper())
-    
-    private val periodicSyncRunnable = object : Runnable {
-        override fun run() {
-            Log.d(TAG, "Running periodic sync")
-            syncData()
-            handler.postDelayed(this, 45 * 60 * 1000) // 45 minutes
-        }
+
+    companion object {
+        private const val TAG = "WeatherUpdateService"
+        private const val AUTHORITY = "org.breezyweather.provider.weather"
     }
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var weatherObserver: ContentObserver? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
-        registerObserver()
-        handler.post(periodicSyncRunnable)
+        setupContentObserver()
     }
 
-    private fun registerObserver() {
-        observer = object : ContentObserver(handler) {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Trigger initial sync on startup
+        triggerSync()
+        return START_STICKY
+    }
+
+    private fun setupContentObserver() {
+        weatherObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
-                syncData()
+                Log.d(TAG, "Content changed: $uri")
+                triggerSync()
             }
         }
 
-        val authority = "org.breezyweather.provider.weather"
         try {
             contentResolver.registerContentObserver(
-                Uri.parse("content://$authority/weather"),
+                Uri.parse("content://$AUTHORITY/weather"),
                 true,
-                observer!!
+                weatherObserver!!
             )
         } catch (e: Exception) {
-            Log.w(TAG, "Could not register observer for $authority: ${e.message}")
+            Log.e(TAG, "Failed to register observer", e)
         }
     }
 
-    private fun syncData() {
-        scope.launch {
-            val data = BreezyDataFetcher.fetchAllWeatherData(this@WeatherUpdateService)
-            if (data != null) {
-                WearSyncHelper.syncWeather(this@WeatherUpdateService, data.city, data.json)
-                Log.d(TAG, "Auto-synced weather data")
+    private fun triggerSync() {
+        serviceScope.launch {
+            try {
+                val data = BreezyDataFetcher.fetchAllWeatherData(this@WeatherUpdateService)
+                if (data != null) {
+                    WearSyncHelper.syncWeather(this@WeatherUpdateService, data)
+                    Log.d(TAG, "Sync complete")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Sync execution failed", e)
             }
         }
     }
 
     override fun onDestroy() {
+        weatherObserver?.let { contentResolver.unregisterContentObserver(it) }
+        serviceScope.cancel()
         super.onDestroy()
-        observer?.let { contentResolver.unregisterContentObserver(it) }
-        Log.d(TAG, "Service destroyed and observer unregistered")
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
     }
 }

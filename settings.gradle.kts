@@ -26,3 +26,4 @@ dependencyResolutionManagement {
 rootProject.name = "breezy weather wear os sync"
 include(":app")
 include(":wear")
+include(":shared")

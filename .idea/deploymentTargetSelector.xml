@@ -2,30 +2,12 @@
 <project version="4">
   <component name="deploymentTargetSelector">
     <selectionStates>
-      <SelectionState runConfigName="app">
-        <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-07-03T18:56:15.411991300Z">
-          <Target type="DEFAULT_BOOT">
-            <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=43111RTJWWQJW2" />
-            </handle>
-          </Target>
-        </DropdownSelection>
-        <DialogSelection />
-      </SelectionState>
       <SelectionState runConfigName="wear">
         <option name="selectionMode" value="DROPDOWN" />
-<<<<<<< HEAD
-        <DropdownSelection timestamp="2026-07-03T20:49:03.921051Z">
-          <Target type="DEFAULT_BOOT">
-            <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=ZD222T8F5H" />
-=======
-        <DropdownSelection timestamp="2026-07-03T18:56:15.411991300Z">
+        <DropdownSelection timestamp="2026-07-03T21:31:37.318435300Z">
           <Target type="DEFAULT_BOOT">
             <handle>
               <DeviceId pluginId="PhysicalDevice" identifier="serial=43111RTJWWQJW2" />
->>>>>>> 37870e2cdb9448c07ec65b3fee7e525596e1034f
             </handle>
           </Target>
         </DropdownSelection>

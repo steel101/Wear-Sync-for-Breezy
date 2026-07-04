@@ -19,7 +19,7 @@ class PhoneDataListenerService : WearableListenerService() {
             scope.launch {
                 val data = BreezyDataFetcher.fetchAllWeatherData(this@PhoneDataListenerService)
                 if (data != null) {
-                    WearSyncHelper.syncWeather(this@PhoneDataListenerService, data.city, data.json)
+                    WearSyncHelper.syncWeather(this@PhoneDataListenerService, data)
                     Log.d(TAG, "Manual refresh complete")
                 } else {
                     Log.w(TAG, "Manual refresh failed: No data found")

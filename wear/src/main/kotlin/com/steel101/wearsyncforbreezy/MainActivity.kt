@@ -82,7 +82,8 @@ fun WearApp() {
                     pressure = map.getString("pressure") ?: pressure
                     dewPoint = map.getString("dew_point") ?: dewPoint
                     rainChance = map.getString("precip_prob") ?: rainChance
-                    hourlyForecast = loadHourlyFromMap(map); dailyForecast = loadDailyFromMap(map)
+                    hourlyForecast = loadHourlyFromMap(map)
+                    dailyForecast = loadDailyFromMap(map)
                     lastSync = formatTime(map.getLong("timestamp"))
                 }
             }
@@ -107,7 +108,8 @@ fun WearApp() {
                     pressure = map.getString("pressure") ?: pressure
                     dewPoint = map.getString("dew_point") ?: dewPoint
                     rainChance = map.getString("precip_prob") ?: rainChance
-                    hourlyForecast = loadHourlyFromMap(map); dailyForecast = loadDailyFromMap(map)
+                    hourlyForecast = loadHourlyFromMap(map)
+                    dailyForecast = loadDailyFromMap(map)
                     lastSync = formatTime(map.getLong("timestamp"))
                 }
             }; items.release()
@@ -208,47 +210,63 @@ fun formatTime(timestamp: Long): String {
 }
 
 fun loadHourly(prefs: SharedPreferences): List<HourData> {
-    val count = prefs.getInt("h_count", 0)
-    return (0 until count).map { i ->
-        HourData(
-            time = prefs.getString("h_time_$i", "--:--") ?: "--:--",
-            icon = prefs.getString("h_cond_icon_$i", "☀️") ?: "☀️",
-            temp = prefs.getString("h_temp_$i", "--") ?: "--"
-        )
+    try {
+        val count = prefs.getInt("h_count", 0)
+        return (0 until count).map { i ->
+            HourData(
+                time = prefs.getString("h_time_$i", "--:--") ?: "--:--",
+                icon = prefs.getString("h_cond_icon_$i", "☀️") ?: "☀️",
+                temp = prefs.getString("h_temp_$i", "--") ?: "--"
+            )
+        }
+    } catch (e: Exception) {
+        return emptyList()
     }
 }
 
 fun loadDaily(prefs: SharedPreferences): List<DayData> {
-    val count = prefs.getInt("fc_count", 0)
-    return (0 until count).map { i ->
-        DayData(
-            name = prefs.getString("fc_day_$i", "--") ?: "--",
-            icon = prefs.getString("fc_icon_$i", "☀️") ?: "☀️",
-            max = prefs.getString("fc_max_$i", "--") ?: "--",
-            min = prefs.getString("fc_min_$i", "--") ?: "--"
-        )
+    try {
+        val count = prefs.getInt("fc_count", 0)
+        return (0 until count).map { i ->
+            DayData(
+                name = prefs.getString("fc_day_$i", "--") ?: "--",
+                icon = prefs.getString("fc_icon_$i", "☀️") ?: "☀️",
+                max = prefs.getString("fc_max_$i", "--") ?: "--",
+                min = prefs.getString("fc_min_$i", "--") ?: "--"
+            )
+        }
+    } catch (e: Exception) {
+        return emptyList()
     }
 }
 
 fun loadHourlyFromMap(dataMap: DataMap): List<HourData> {
-    val count = dataMap.getInt("h_count")
-    return (0 until count).map { i ->
-        HourData(
-            time = dataMap.getString("h_time_$i") ?: "--:--",
-            icon = dataMap.getString("h_cond_icon_$i") ?: "☀️",
-            temp = dataMap.getString("h_temp_$i") ?: "--"
-        )
+    try {
+        val count = dataMap.getInt("h_count")
+        return (0 until count).map { i ->
+            HourData(
+                time = dataMap.getString("h_time_$i") ?: "--:--",
+                icon = dataMap.getString("h_cond_icon_$i") ?: "☀️",
+                temp = dataMap.getString("h_temp_$i") ?: "--"
+            )
+        }
+    } catch (e: Exception) {
+        return emptyList()
     }
 }
 
 fun loadDailyFromMap(dataMap: DataMap): List<DayData> {
-    val count = dataMap.getInt("fc_count")
-    return (0 until count).map { i ->
-        DayData(
-            name = dataMap.getString("fc_day_$i") ?: "--",
-            icon = dataMap.getString("fc_icon_$i") ?: "☀️",
-            max = dataMap.getString("fc_max_$i") ?: "--",
-            min = dataMap.getString("fc_min_$i") ?: "--"
-        )
+    try {
+        val count = dataMap.getInt("fc_count")
+        return (0 until count).map { i ->
+            DayData(
+                name = dataMap.getString("fc_day_$i") ?: "--",
+                icon = dataMap.getString("fc_icon_$i") ?: "☀️",
+                max = dataMap.getString("fc_max_$i") ?: "--",
+                min = dataMap.getString("fc_min_$i") ?: "--"
+            )
+        }
+    } catch (e: Exception) {
+        return emptyList()
     }
 }

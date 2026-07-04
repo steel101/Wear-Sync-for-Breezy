@@ -1,6 +1,6 @@
 plugins {
     id("com.android.library")
-    kotlin("android") apply false
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
@@ -18,5 +18,7 @@ android {
 }
 
 dependencies {
+    api(libs.breezy.datasharing)
+    implementation(libs.kotlinx.serialization.json)
     implementation("org.json:json:20250107")
 }
