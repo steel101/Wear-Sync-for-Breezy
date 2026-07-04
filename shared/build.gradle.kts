@@ -1,7 +1,7 @@
 plugins {
     id("com.android.library")
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.serialization) // FIXED: Matches your exact root catalog alias name!
+    id("org.jetbrains.kotlin.plugin.serialization") // FIXED: Using direct ID string format
 }
 
 android {
