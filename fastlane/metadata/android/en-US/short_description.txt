@@ -1,1 +1,1 @@
-Wear Sync for Breezy sends Breezy weather data from your phone to your Wear OS watch.
+send Breezy weather data from your phone to your Wear OS watch
