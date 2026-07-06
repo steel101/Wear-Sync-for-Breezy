@@ -1,20 +1,24 @@
 package com.steel101.wearsyncforbreezy
 
 import android.content.Context
-import android.content.Intent
+
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.content.edit
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.*
 import com.steel101.wearsyncforbreezy.sync.WearSyncHelper
+import com.steel101.wearsyncforbreezy.sync.WeatherSyncWorker
+import kotlinx.coroutines.tasks.await
 import org.breezyweather.datasharing.BreezyLocation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 
 sealed interface SyncUiState {
     object Idle : SyncUiState
@@ -42,9 +46,65 @@ class WeatherSyncViewModel : ViewModel() {
     private val _lastSyncTime = MutableStateFlow(0L)
     val lastSyncTime: StateFlow<Long> = _lastSyncTime
 
+    private val _autoSyncEnabled = MutableStateFlow(true)
+    val autoSyncEnabled: StateFlow<Boolean> = _autoSyncEnabled
+
+    private val _watchStatus = MutableStateFlow("Checking...")
+    val watchStatus: StateFlow<String> = _watchStatus
+
+    fun updateWatchStatus(context: Context) {
+        viewModelScope.launch {
+            try {
+                val nodes = com.google.android.gms.wearable.Wearable.getNodeClient(context).connectedNodes.await()
+                if (nodes.isEmpty()) {
+                    _watchStatus.value = "Watch Disconnected"
+                } else {
+                    val nodeNames = nodes.joinToString { it.displayName }
+                    _watchStatus.value = "Watch Connected: $nodeNames"
+                }
+            } catch (e: Exception) {
+                _watchStatus.value = "Status Unknown"
+            }
+        }
+    }
+
     fun loadCachedTime(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         _lastSyncTime.value = prefs.getLong(KEY_LAST_SYNC, 0L)
+        val enabled = prefs.getBoolean("auto_sync", true)
+        _autoSyncEnabled.value = enabled
+        scheduleBackgroundSync(context, enabled)
+    }
+
+    fun setAutoSync(context: Context, enabled: Boolean) {
+        _autoSyncEnabled.value = enabled
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
+            putBoolean("auto_sync", enabled)
+        }
+        scheduleBackgroundSync(context, enabled)
+    }
+
+    fun scheduleBackgroundSync(context: Context, enabled: Boolean) {
+        val workManager = WorkManager.getInstance(context)
+        if (enabled) {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+
+            val syncRequest = PeriodicWorkRequestBuilder<WeatherSyncWorker>(30, TimeUnit.MINUTES)
+                .setConstraints(constraints)
+                .build()
+
+            workManager.enqueueUniquePeriodicWork(
+                "WeatherSyncWork",
+                ExistingPeriodicWorkPolicy.KEEP,
+                syncRequest
+            )
+            Log.d(TAG, "Background sync scheduled every 30 mins")
+        } else {
+            workManager.cancelUniqueWork("WeatherSyncWork")
+            Log.d(TAG, "Background sync cancelled")
+        }
     }
 
     fun checkAndFetchInitialData(context: Context) {
@@ -67,19 +127,19 @@ class WeatherSyncViewModel : ViewModel() {
     }
 
     fun fetchAndSync(context: Context) {
+        updateWatchStatus(context)
         viewModelScope.launch {
             _uiState.value = SyncUiState.Loading
             try {
-                // Force computation onto background worker threads
-                val data = withContext(Dispatchers.IO) {
+                val locations = withContext(Dispatchers.IO) {
                     BreezyDataFetcher.fetchAllWeatherData(context)
                 }
 
-                if (data != null) {
-                    _weatherData.value = data
+                if (locations.isNotEmpty()) {
+                    _weatherData.value = locations[0]
 
                     withContext(Dispatchers.IO) {
-                        WearSyncHelper.syncWeather(context, data)
+                        WearSyncHelper.syncWeather(context, locations)
                         val now = System.currentTimeMillis()
                         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
                             putLong(KEY_LAST_SYNC, now)
@@ -88,7 +148,7 @@ class WeatherSyncViewModel : ViewModel() {
                     }
 
                     _uiState.value = SyncUiState.Success("Synced successfully!")
-                    context.startService(Intent(context, WeatherUpdateService::class.java))
+                    scheduleBackgroundSync(context, _autoSyncEnabled.value)
                 } else {
                     _uiState.value = SyncUiState.Error("No data found. Open Breezy Weather first.")
                 }

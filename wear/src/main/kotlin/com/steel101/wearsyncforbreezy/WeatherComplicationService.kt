@@ -3,9 +3,12 @@ package com.steel101.wearsyncforbreezy
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+
+import androidx.wear.watchface.complications.data.ColorRamp
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.PlainComplicationText
+import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceService
@@ -27,6 +30,21 @@ class WeatherComplicationService : ComplicationDataSourceService() {
                     text = PlainComplicationText.Builder(temp).build(),
                     contentDescription = PlainComplicationText.Builder("Current Temperature").build()
                 )
+                .setTapAction(pendingIntent)
+                .build()
+            }
+            ComplicationType.RANGED_VALUE -> {
+                val value = temp.filter { it.isDigit() || it == '-' }.toFloatOrNull() ?: 0f
+                val color = WeatherUtils.getTempColor(temp)
+                RangedValueComplicationData.Builder(
+                    value = value,
+                    min = -20f,
+                    max = 120f,
+                    contentDescription = PlainComplicationText.Builder("Current Temperature").build()
+                )
+                .setText(PlainComplicationText.Builder(temp).build())
+                .setTitle(PlainComplicationText.Builder("Temp").build())
+                .setColorRamp(ColorRamp(intArrayOf(color), true))
                 .setTapAction(pendingIntent)
                 .build()
             }

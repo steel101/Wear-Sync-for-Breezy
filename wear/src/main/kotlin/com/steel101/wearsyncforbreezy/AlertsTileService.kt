@@ -17,7 +17,7 @@ import androidx.concurrent.futures.ResolvableFuture
 class AlertsTileService : TileService() {
     override fun onTileRequest(requestParams: RequestBuilders.TileRequest): ListenableFuture<TileBuilders.Tile> {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
-        val count = prefs.getInt("al_count", 0)
+        val count = prefs.getInt("alert_count", 0)
         val timestamp = prefs.getLong("timestamp", 0)
 
         val launchAction = ActionBuilders.LaunchAction.Builder()
@@ -44,7 +44,15 @@ class AlertsTileService : TileService() {
             .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(12f)).build())
 
         if (count > 0) {
-            val headline = prefs.getString("al_head_0", "") ?: ""
+            val headline = prefs.getString("alert_title_0", "") ?: ""
+            
+            rootColumn.addContent(
+                LayoutElementBuilders.Text.Builder()
+                    .setText("⚠️")
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(32f)).build())
+                    .build()
+            )
+            rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
 
             rootColumn.addContent(
                 LayoutElementBuilders.Box.Builder()
@@ -80,6 +88,13 @@ class AlertsTileService : TileService() {
                 )
             }
         } else {
+            rootColumn.addContent(
+                LayoutElementBuilders.Text.Builder()
+                    .setText("✅")
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(32f)).build())
+                    .build()
+            )
+            rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
             rootColumn.addContent(
                 LayoutElementBuilders.Text.Builder()
                     .setText("No Active Alerts")

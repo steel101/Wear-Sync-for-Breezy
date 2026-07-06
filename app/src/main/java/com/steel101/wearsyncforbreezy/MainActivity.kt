@@ -8,6 +8,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -31,7 +36,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        startService(Intent(this, WeatherUpdateService::class.java))
+        
+        schedulePeriodicSync()
 
         setContent {
             BreezyWeatherWearOsSyncTheme {
@@ -44,6 +50,24 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun schedulePeriodicSync() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val syncRequest = PeriodicWorkRequestBuilder<WeatherSyncWorker>(
+            30, java.util.concurrent.TimeUnit.MINUTES
+        )
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "WeatherSyncWork",
+            ExistingPeriodicWorkPolicy.REPLACE,
+            syncRequest
+        )
+    }
 }
 
 @Composable
@@ -55,10 +79,13 @@ fun WeatherSyncScreen(
     val uiState by viewModel.uiState.collectAsState()
     val weatherData by viewModel.weatherData.collectAsState()
     val lastSyncTime by viewModel.lastSyncTime.collectAsState()
+    val autoSyncEnabled by viewModel.autoSyncEnabled.collectAsState()
+    val watchStatus by viewModel.watchStatus.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.loadCachedTime(context)
         viewModel.checkAndFetchInitialData(context)
+        viewModel.updateWatchStatus(context)
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -83,6 +110,8 @@ fun WeatherSyncScreen(
 
         weatherData?.let { data ->
             WeatherInfoCard(data)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(text = watchStatus, fontSize = 14.sp, color = if (watchStatus.contains("Connected")) Color(0xFF4CAF50) else Color.Gray)
             Spacer(modifier = Modifier.height(32.dp))
         }
 
@@ -103,7 +132,20 @@ fun WeatherSyncScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Handle Status Text dynamically
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(0.8f)
+        ) {
+            Text("Auto-Sync (Background)")
+            Switch(
+                checked = autoSyncEnabled,
+                onCheckedChange = { viewModel.setAutoSync(context, it) }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         val statusText = when (val state = uiState) {
             is SyncUiState.Loading -> "Fetching data..."
             is SyncUiState.Success -> state.message

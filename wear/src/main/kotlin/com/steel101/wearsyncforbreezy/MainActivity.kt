@@ -5,8 +5,12 @@ import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.*
+import android.util.Log
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -18,7 +22,11 @@ import androidx.wear.compose.foundation.lazy.AutoCenteringParams
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.*
+import androidx.wear.compose.material.dialog.Alert
+import androidx.wear.compose.material.dialog.Dialog
 import com.google.android.gms.wearable.*
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -26,39 +34,64 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { WearApp() }
+        val target = intent.getStringExtra("EXTRA_TILE_TARGET")
+        setContent { WearApp(target) }
     }
 }
 
 @Composable
-fun WearApp() {
+fun WearApp(initialTarget: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE) }
     val listState = rememberScalingLazyListState()
 
-    var city by remember { mutableStateOf(prefs.getString("city", "No Data") ?: "No Data") }
-    var temp by remember { mutableStateOf(prefs.getString("temp", "--") ?: "--") }
-    var tempMax by remember { mutableStateOf(prefs.getString("temp_max", "--") ?: "--") }
-    var tempMin by remember { mutableStateOf(prefs.getString("temp_min", "--") ?: "--") }
-    var condition by remember { mutableStateOf(prefs.getString("condition", "--") ?: "--") }
-    var conditionIcon by remember { mutableStateOf(prefs.getString("cond_icon", "☀️") ?: "☀️") }
+    var locationIndex by remember { mutableStateOf(0) }
+    var locationCount by remember { mutableStateOf(prefs.getInt("location_count", 1)) }
+    
+    val currentPrefix = remember(locationIndex) { if (locationIndex == 0) "" else "loc_${locationIndex}_" }
 
-    var feelsLike by remember { mutableStateOf(prefs.getString("feels_like", "--") ?: "--") }
-    var humidity by remember { mutableStateOf(prefs.getString("humidity", "--") ?: "--") }
-    var wind by remember { mutableStateOf(prefs.getString("wind", "--") ?: "--") }
-    var uv by remember { mutableStateOf(prefs.getString("uv", "--") ?: "--") }
-    var aqi by remember { mutableStateOf(prefs.getString("aqi", "--") ?: "--") }
-    var visibility by remember { mutableStateOf(prefs.getString("visibility", "--") ?: "--") }
-    var pressure by remember { mutableStateOf(prefs.getString("pressure", "--") ?: "--") }
-    var dewPoint by remember { mutableStateOf(prefs.getString("dew_point", "--") ?: "--") }
-    var rainChance by remember { mutableStateOf(prefs.getString("precip_prob", "--") ?: "--") }
+    var city by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}city", "No Data") ?: "No Data") }
+    var temp by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}temp", "--") ?: "--") }
+    var tempMax by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}temp_max", "--") ?: "--") }
+    var tempMin by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}temp_min", "--") ?: "--") }
+    var condition by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}condition", "--") ?: "--") }
+    var conditionIcon by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}cond_icon", "☀️") ?: "☀️") }
 
-    var hourlyForecast by remember { mutableStateOf(loadHourly(prefs)) }
-    var dailyForecast by remember { mutableStateOf(loadDaily(prefs)) }
+    var feelsLike by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}feels_like", "--") ?: "--") }
+    var humidity by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}humidity", "--") ?: "--") }
+    var wind by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}wind", "--") ?: "--") }
+    var uv by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}uv", "--") ?: "--") }
+    var aqi by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}aqi", "--") ?: "--") }
+    var visibility by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}visibility", "--") ?: "--") }
+    var pressure by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}pressure", "--") ?: "--") }
+    var dewPoint by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}dew_point", "--") ?: "--") }
+    var rainChance by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}precip_prob", "--") ?: "--") }
+    
+    var bulletinNow by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}bulletin_now", "") ?: "") }
+    var bulletinNext by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}bulletin_next", "") ?: "") }
+    
+    var cloudCover by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}cloud_cover", "--") ?: "--") }
+    var ceiling by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}ceiling", "--") ?: "--") }
+    var sunshine by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}sunshine", "--") ?: "--") }
+    
+    var pollenTree by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}pollen_tree", "--") ?: "--") }
+    var pollenGrass by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}pollen_grass", "--") ?: "--") }
+    var pollenWeed by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}pollen_weed", "--") ?: "--") }
 
+    var hourlyForecast by remember(locationIndex) { mutableStateOf(loadHourly(prefs, currentPrefix)) }
+    var dailyForecast by remember(locationIndex) { mutableStateOf(loadDaily(prefs, currentPrefix)) }
+
+    var selectedHour by remember { mutableStateOf<HourData?>(null) }
     var lastSync by remember {
         val ts = prefs.getLong("timestamp", 0)
         mutableStateOf(if (ts > 0) formatTime(ts) else "Never")
+    }
+
+    LaunchedEffect(initialTarget) {
+        when (initialTarget) {
+            "WIND" -> listState.scrollToItem(15)
+            "HOURLY" -> listState.scrollToItem(25)
+        }
     }
 
     DisposableEffect(Unit) {
@@ -67,53 +100,39 @@ fun WearApp() {
             events.forEach { event ->
                 if (event.type == DataEvent.TYPE_CHANGED && event.dataItem.uri.path == "/weather_data") {
                     val map = DataMapItem.fromDataItem(event.dataItem).dataMap
-                    city = map.getString("city") ?: city
-                    temp = map.getString("temp") ?: temp
-                    tempMax = map.getString("temp_max") ?: tempMax
-                    tempMin = map.getString("temp_min") ?: tempMin
-                    condition = map.getString("condition") ?: condition
-                    conditionIcon = map.getString("cond_icon") ?: conditionIcon
-                    feelsLike = map.getString("feels_like") ?: feelsLike
-                    humidity = map.getString("humidity") ?: humidity
-                    wind = map.getString("wind") ?: wind
-                    uv = map.getString("uv") ?: uv
-                    aqi = map.getString("aqi") ?: aqi
-                    visibility = map.getString("visibility") ?: visibility
-                    pressure = map.getString("pressure") ?: pressure
-                    dewPoint = map.getString("dew_point") ?: dewPoint
-                    rainChance = map.getString("precip_prob") ?: rainChance
-                    hourlyForecast = loadHourlyFromMap(map)
-                    dailyForecast = loadDailyFromMap(map)
+                    locationCount = map.getInt("location_count", 1)
+                    val prefix = if (locationIndex == 0) "" else "loc_${locationIndex}_"
+                    
+                    city = map.getString("${prefix}city") ?: city
+                    temp = map.getString("${prefix}temp") ?: temp
+                    tempMax = map.getString("${prefix}temp_max") ?: tempMax
+                    tempMin = map.getString("${prefix}temp_min") ?: tempMin
+                    condition = map.getString("${prefix}condition") ?: condition
+                    conditionIcon = map.getString("${prefix}cond_icon") ?: conditionIcon
+                    feelsLike = map.getString("${prefix}feels_like") ?: feelsLike
+                    humidity = map.getString("${prefix}humidity") ?: humidity
+                    wind = map.getString("${prefix}wind") ?: wind
+                    uv = map.getString("${prefix}uv") ?: uv
+                    aqi = map.getString("${prefix}aqi") ?: aqi
+                    visibility = map.getString("${prefix}visibility") ?: visibility
+                    pressure = map.getString("${prefix}pressure") ?: pressure
+                    dewPoint = map.getString("${prefix}dew_point") ?: dewPoint
+                    rainChance = map.getString("${prefix}precip_prob") ?: rainChance
+                    bulletinNow = map.getString("${prefix}bulletin_now") ?: ""
+                    bulletinNext = map.getString("${prefix}bulletin_next") ?: ""
+                    cloudCover = map.getString("${prefix}cloud_cover") ?: "--"
+                    ceiling = map.getString("${prefix}ceiling") ?: "--"
+                    sunshine = map.getString("${prefix}sunshine") ?: "--"
+                    pollenTree = map.getString("${prefix}pollen_tree") ?: "--"
+                    pollenGrass = map.getString("${prefix}pollen_grass") ?: "--"
+                    pollenWeed = map.getString("${prefix}pollen_weed") ?: "--"
+                    hourlyForecast = loadHourlyFromMap(map, prefix)
+                    dailyForecast = loadDailyFromMap(map, prefix)
                     lastSync = formatTime(map.getLong("timestamp"))
                 }
             }
         }
         dataClient.addListener(listener)
-        dataClient.dataItems.addOnSuccessListener { items ->
-            items.forEach { item ->
-                if (item.uri.path == "/weather_data") {
-                    val map = DataMapItem.fromDataItem(item).dataMap
-                    city = map.getString("city") ?: city
-                    temp = map.getString("temp") ?: temp
-                    tempMax = map.getString("temp_max") ?: tempMax
-                    tempMin = map.getString("temp_min") ?: tempMin
-                    condition = map.getString("condition") ?: condition
-                    conditionIcon = map.getString("cond_icon") ?: conditionIcon
-                    feelsLike = map.getString("feels_like") ?: feelsLike
-                    humidity = map.getString("humidity") ?: humidity
-                    wind = map.getString("wind") ?: wind
-                    uv = map.getString("uv") ?: uv
-                    aqi = map.getString("aqi") ?: aqi
-                    visibility = map.getString("visibility") ?: visibility
-                    pressure = map.getString("pressure") ?: pressure
-                    dewPoint = map.getString("dew_point") ?: dewPoint
-                    rainChance = map.getString("precip_prob") ?: rainChance
-                    hourlyForecast = loadHourlyFromMap(map)
-                    dailyForecast = loadDailyFromMap(map)
-                    lastSync = formatTime(map.getLong("timestamp"))
-                }
-            }; items.release()
-        }
         onDispose { dataClient.removeListener(listener) }
     }
 
@@ -124,7 +143,27 @@ fun WearApp() {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 autoCentering = AutoCenteringParams(itemIndex = 0)
             ) {
-                item { Text(text = city, style = MaterialTheme.typography.title3, color = Color.White.copy(0.8f)) }
+                item { 
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { 
+                                if (locationCount > 1) {
+                                    locationIndex = (locationIndex + 1) % locationCount 
+                                }
+                            }
+                    ) {
+                        Text(
+                            text = city, 
+                            style = MaterialTheme.typography.title3, 
+                            color = if (locationCount > 1) Color.Yellow.copy(0.8f) else Color.White.copy(0.8f)
+                        )
+                        if (locationCount > 1) {
+                            Text(text = "Tap to cycle cities", style = MaterialTheme.typography.caption2, color = Color.Gray)
+                        }
+                    }
+                }
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(conditionIcon, fontSize = 42.sp)
@@ -132,26 +171,75 @@ fun WearApp() {
                         Text(text = temp, fontSize = 38.sp, style = MaterialTheme.typography.display1)
                     }
                 }
-                item { Text(condition, style = MaterialTheme.typography.title2, textAlign = TextAlign.Center) }
-                item { Text("H: $tempMax  L: $tempMin", style = MaterialTheme.typography.body2, color = Color.Gray) }
+                if (condition != "--") {
+                    item { Text(condition, style = MaterialTheme.typography.title2, textAlign = TextAlign.Center) }
+                }
+                if (tempMax != "--" || tempMin != "--") {
+                    item { Text("H: $tempMax  L: $tempMin", style = MaterialTheme.typography.body2, color = Color.Gray) }
+                }
+                
+                if (bulletinNow.isNotEmpty()) {
+                    item { Spacer(Modifier.height(8.dp)) }
+                    item { 
+                        Text(
+                            text = bulletinNow, 
+                            style = MaterialTheme.typography.body2, 
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = Color.Yellow.copy(alpha = 0.9f)
+                        ) 
+                    }
+                }
+                if (bulletinNext.isNotEmpty()) {
+                    item { Spacer(Modifier.height(4.dp)) }
+                    item { 
+                        Text(
+                            text = bulletinNext, 
+                            style = MaterialTheme.typography.caption1, 
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        ) 
+                    }
+                }
+                
                 item { Spacer(Modifier.height(16.dp)) }
-                item { DetailRow("Feels Like", feelsLike) }
-                item { DetailRow("Rain Chance", rainChance) }
-                item { DetailRow("Wind", wind) }
-                item { DetailRow("Humidity", humidity) }
-                item { DetailRow("UV Index", uv) }
-                item { DetailRow("AQI", aqi) }
-                item { DetailRow("Visibility", visibility) }
-                item { DetailRow("Pressure", pressure) }
-                item { DetailRow("Dew Point", dewPoint) }
+                if (feelsLike != "--") item { DetailRow("Feels Like", feelsLike) }
+                if (rainChance != "--") item { DetailRow("Rain Chance", rainChance) }
+                if (wind != "--") item { DetailRow("Wind", wind) }
+                if (humidity != "--") item { DetailRow("Humidity", humidity) }
+                if (uv != "--") item { DetailRow("UV Index", uv) }
+                if (aqi != "--") item { DetailRow("AQI", aqi) }
+                if (visibility != "--") item { DetailRow("Visibility", visibility) }
+                if (pressure != "--") item { DetailRow("Pressure", pressure) }
+                if (dewPoint != "--") item { DetailRow("Dew Point", dewPoint) }
+                
+                if (cloudCover != "--" || ceiling != "--" || sunshine != "--") {
+                    item { Spacer(Modifier.height(8.dp)) }
+                    item { Text("Environment", style = MaterialTheme.typography.caption1, color = Color.Gray) }
+                    if (cloudCover != "--") item { DetailRow("Cloud Cover", cloudCover) }
+                    if (ceiling != "--") item { DetailRow("Ceiling", ceiling) }
+                    if (sunshine != "--") item { DetailRow("Sunshine", sunshine) }
+                }
+                
+                if (pollenTree != "--" || pollenGrass != "--" || pollenWeed != "--") {
+                    item { Spacer(Modifier.height(8.dp)) }
+                    item { Text("Pollen", style = MaterialTheme.typography.caption1, color = Color.Gray) }
+                    if (pollenTree != "--") item { DetailRow("Tree", pollenTree) }
+                    if (pollenGrass != "--") item { DetailRow("Grass", pollenGrass) }
+                    if (pollenWeed != "--") item { DetailRow("Weed", pollenWeed) }
+                }
+
                 item { Spacer(Modifier.height(16.dp)) }
                 if (hourlyForecast.isNotEmpty()) {
                     item { Text("Hourly", style = MaterialTheme.typography.title3, color = Color.Gray) }
                     item {
                         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                            hourlyForecast.forEach { hour ->
+                            for (hour in hourlyForecast) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp)
+                                        .clickable { selectedHour = hour },
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(hour.time, style = MaterialTheme.typography.caption2)
@@ -168,7 +256,7 @@ fun WearApp() {
                     item { Text("Daily", style = MaterialTheme.typography.title3, color = Color.Gray) }
                     item {
                         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                            dailyForecast.forEach { day ->
+                            for (day in dailyForecast) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween
@@ -184,6 +272,58 @@ fun WearApp() {
 
                 item { Spacer(Modifier.height(12.dp)) }
                 item { Text(text = "Sync: $lastSync", style = MaterialTheme.typography.caption2, color = Color.Gray) }
+                item { Spacer(Modifier.height(8.dp)) }
+                item {
+                    val scope = rememberCoroutineScope()
+                    Chip(
+                        onClick = {
+                            scope.launch {
+                                try {
+                                    val nodes = Wearable.getNodeClient(context).connectedNodes.await()
+                                    nodes.forEach { node ->
+                                        Wearable.getMessageClient(context).sendMessage(node.id, "/request_refresh", null).await()
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Failed refresh", e)
+                                }
+                            }
+                        },
+                        label = { Text("Refresh") },
+                        icon = { Icon(Icons.Default.Refresh, contentDescription = "Refresh") },
+                        colors = ChipDefaults.secondaryChipColors(),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    )
+                }
+                item { Spacer(Modifier.height(24.dp)) }
+            }
+        }
+
+        val currentHour = selectedHour
+        if (currentHour != null) {
+            HourDetailAlert(currentHour) { selectedHour = null }
+        }
+    }
+}
+
+@Composable
+fun HourDetailAlert(hour: HourData, onDismiss: () -> Unit) {
+    Dialog(
+        showDialog = true,
+        onDismissRequest = onDismiss
+    ) {
+        Alert(
+            title = { Text(hour.time, textAlign = TextAlign.Center) },
+            icon = { Text(hour.icon, fontSize = 32.sp) }
+        ) {
+            item {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    Text(hour.temp, style = MaterialTheme.typography.display3)
+                    Spacer(Modifier.height(8.dp))
+                    if (hour.precip.isNotEmpty()) {
+                        DetailRow("Rain", hour.precip)
+                    }
+                    DetailRow("Condition", hour.condition)
+                }
             }
         }
     }
@@ -200,73 +340,68 @@ fun DetailRow(label: String, value: String) {
     }
 }
 
-data class HourData(val time: String, val icon: String, val temp: String)
+data class HourData(val time: String, val icon: String, val temp: String, val precip: String = "", val condition: String = "")
 data class DayData(val name: String, val icon: String, val max: String, val min: String)
 
 fun formatTime(timestamp: Long): String {
     if (timestamp == 0L) return "Never"
-    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-    return sdf.format(Date(timestamp))
+    return SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
 }
 
-fun loadHourly(prefs: SharedPreferences): List<HourData> {
+fun loadHourly(prefs: SharedPreferences, prefix: String): List<HourData> {
     try {
-        val count = prefs.getInt("h_count", 0)
+        val count = prefs.getInt("${prefix}h_count", 0)
         return (0 until count).map { i ->
             HourData(
-                time = prefs.getString("h_time_$i", "--:--") ?: "--:--",
-                icon = prefs.getString("h_cond_icon_$i", "☀️") ?: "☀️",
-                temp = prefs.getString("h_temp_$i", "--") ?: "--"
+                time = prefs.getString("${prefix}h_time_$i", "--:--") ?: "--:--",
+                icon = prefs.getString("${prefix}h_cond_icon_$i", "☀️") ?: "☀️",
+                temp = prefs.getString("${prefix}h_temp_$i", "--") ?: "--",
+                precip = prefs.getString("${prefix}h_precip_$i", "") ?: "",
+                condition = prefs.getString("${prefix}h_cond_$i", "") ?: ""
             )
         }
-    } catch (e: Exception) {
-        return emptyList()
-    }
+    } catch (_: Exception) { return emptyList() }
 }
 
-fun loadDaily(prefs: SharedPreferences): List<DayData> {
+fun loadDaily(prefs: SharedPreferences, prefix: String): List<DayData> {
     try {
-        val count = prefs.getInt("fc_count", 0)
+        val count = prefs.getInt("${prefix}fc_count", 0)
         return (0 until count).map { i ->
             DayData(
-                name = prefs.getString("fc_day_$i", "--") ?: "--",
-                icon = prefs.getString("fc_icon_$i", "☀️") ?: "☀️",
-                max = prefs.getString("fc_max_$i", "--") ?: "--",
-                min = prefs.getString("fc_min_$i", "--") ?: "--"
+                name = prefs.getString("${prefix}fc_day_$i", "--") ?: "--",
+                icon = prefs.getString("${prefix}fc_icon_$i", "☀️") ?: "☀️",
+                max = prefs.getString("${prefix}fc_max_$i", "--") ?: "--",
+                min = prefs.getString("${prefix}fc_min_$i", "--") ?: "--"
             )
         }
-    } catch (e: Exception) {
-        return emptyList()
-    }
+    } catch (_: Exception) { return emptyList() }
 }
 
-fun loadHourlyFromMap(dataMap: DataMap): List<HourData> {
+fun loadHourlyFromMap(dataMap: DataMap, prefix: String): List<HourData> {
     try {
-        val count = dataMap.getInt("h_count")
+        val count = dataMap.getInt("${prefix}h_count")
         return (0 until count).map { i ->
             HourData(
-                time = dataMap.getString("h_time_$i") ?: "--:--",
-                icon = dataMap.getString("h_cond_icon_$i") ?: "☀️",
-                temp = dataMap.getString("h_temp_$i") ?: "--"
+                time = dataMap.getString("${prefix}h_time_$i") ?: "--:--",
+                icon = dataMap.getString("${prefix}h_cond_icon_$i") ?: "☀️",
+                temp = dataMap.getString("${prefix}h_temp_$i") ?: "--",
+                precip = dataMap.getString("${prefix}h_precip_$i") ?: "",
+                condition = dataMap.getString("${prefix}h_cond_$i") ?: ""
             )
         }
-    } catch (e: Exception) {
-        return emptyList()
-    }
+    } catch (_: Exception) { return emptyList() }
 }
 
-fun loadDailyFromMap(dataMap: DataMap): List<DayData> {
+fun loadDailyFromMap(dataMap: DataMap, prefix: String): List<DayData> {
     try {
-        val count = dataMap.getInt("fc_count")
+        val count = dataMap.getInt("${prefix}fc_count")
         return (0 until count).map { i ->
             DayData(
-                name = dataMap.getString("fc_day_$i") ?: "--",
-                icon = dataMap.getString("fc_icon_$i") ?: "☀️",
-                max = dataMap.getString("fc_max_$i") ?: "--",
-                min = dataMap.getString("fc_min_$i") ?: "--"
+                name = dataMap.getString("${prefix}fc_day_$i") ?: "--",
+                icon = dataMap.getString("${prefix}fc_icon_$i") ?: "☀️",
+                max = dataMap.getString("${prefix}fc_max_$i") ?: "--",
+                min = dataMap.getString("${prefix}fc_min_$i") ?: "--"
             )
         }
-    } catch (e: Exception) {
-        return emptyList()
-    }
+    } catch (_: Exception) { return emptyList() }
 }

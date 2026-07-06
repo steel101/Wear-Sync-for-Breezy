@@ -14,13 +14,10 @@ import androidx.wear.tiles.TileService
 import com.google.common.util.concurrent.ListenableFuture
 import androidx.concurrent.futures.ResolvableFuture
 
-class WindTileService : TileService() {
+class MoonTileService : TileService() {
     override fun onTileRequest(requestParams: RequestBuilders.TileRequest): ListenableFuture<TileBuilders.Tile> {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
-        val wind = prefs.getString("wind", "--") ?: "--"
-        val gusts = prefs.getString("wind_gusts", "--") ?: "--"
-        val beaufort = prefs.getString("wind_bf", "--") ?: "--"
-        val degree = prefs.getFloat("wind_dir", -1f)
+        val moonPhase = prefs.getString("moon_phase", "--") ?: "--"
         val timestamp = prefs.getLong("timestamp", 0)
 
         val launchAction = ActionBuilders.LaunchAction.Builder()
@@ -36,54 +33,33 @@ class WindTileService : TileService() {
             .setClickable(ModifiersBuilders.Clickable.Builder().setId("launch").setOnClick(launchAction).build())
             .build()
 
+        val phaseName = moonPhase.substringBeforeLast(" ").trim()
+        val phaseEmoji = moonPhase.substringAfterLast(" ").trim()
+
         val rootColumn = LayoutElementBuilders.Column.Builder()
             .setModifiers(rootModifiers)
             .addContent(
                 LayoutElementBuilders.Text.Builder()
-                    .setText("Wind")
+                    .setText("Moon Phase")
                     .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(14f)).build())
                     .build()
             )
-            .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
+            .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(12f)).build())
 
-        if (wind != "--") {
-            if (degree != -1f) {
-                val arrows = listOf("↑", "↗", "→", "↘", "↓", "↙", "←", "↖")
-                val arrow = arrows[((degree + 22.5) % 360 / 45).toInt()]
-                rootColumn.addContent(
-                    LayoutElementBuilders.Text.Builder()
-                        .setText(arrow)
-                        .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(32f)).build())
-                        .build()
-                )
-            }
-
+        if (moonPhase != "--") {
             rootColumn.addContent(
                 LayoutElementBuilders.Text.Builder()
-                    .setText(wind)
-                    .setMaxLines(2)
-                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(22f)).setWeight(LayoutElementBuilders.FONT_WEIGHT_BOLD).build())
+                    .setText(phaseEmoji)
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(48f)).build())
                     .build()
             )
-
-            if (!wind.contains("(G") && gusts != "--" && gusts.isNotEmpty()) {
-                rootColumn.addContent(
-                    LayoutElementBuilders.Text.Builder()
-                        .setText("Gusts: $gusts")
-                        .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(14f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
-                        .build()
-                )
-            }
-
-            if (beaufort != "--") {
-                rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(4f)).build())
-                rootColumn.addContent(
-                    LayoutElementBuilders.Text.Builder()
-                        .setText(beaufort)
-                        .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(12f)).build())
-                        .build()
-                )
-            }
+            rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
+            rootColumn.addContent(
+                LayoutElementBuilders.Text.Builder()
+                    .setText(phaseName)
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(16f)).setWeight(LayoutElementBuilders.FONT_WEIGHT_BOLD).build())
+                    .build()
+            )
         } else {
             rootColumn.addContent(
                 LayoutElementBuilders.Text.Builder()
@@ -96,19 +72,29 @@ class WindTileService : TileService() {
         val tile = try {
             TileBuilders.Tile.Builder()
                 .setResourcesVersion(timestamp.toString())
-                .setTileTimeline(TimelineBuilders.Timeline.Builder()
-                    .addTimelineEntry(TimelineBuilders.TimelineEntry.Builder()
-                        .setLayout(LayoutElementBuilders.Layout.fromLayoutElement(
-                            LayoutElementBuilders.Box.Builder()
-                                .setWidth(DimensionBuilders.expand())
-                                .setHeight(DimensionBuilders.expand())
-                                .addContent(rootColumn.build())
+                .setTileTimeline(
+                    TimelineBuilders.Timeline.Builder()
+                        .addTimelineEntry(
+                            TimelineBuilders.TimelineEntry.Builder()
+                                .setLayout(
+                                    LayoutElementBuilders.Layout.fromLayoutElement(
+                                        LayoutElementBuilders.Box.Builder()
+                                            .setWidth(DimensionBuilders.expand())
+                                            .setHeight(DimensionBuilders.expand())
+                                            .addContent(rootColumn.build())
+                                            .build()
+                                    )
+                                )
                                 .build()
-                        )).build())
-                    .build())
+                        )
+                        .build()
+                )
                 .build()
         } catch (e: Exception) {
-            TileBuilders.Tile.Builder().setResourcesVersion("error").setTileTimeline(TimelineBuilders.Timeline.Builder().addTimelineEntry(TimelineBuilders.TimelineEntry.Builder().setLayout(LayoutElementBuilders.Layout.fromLayoutElement(LayoutElementBuilders.Text.Builder().setText("Error").build())).build()).build()).build()
+            TileBuilders.Tile.Builder()
+                .setResourcesVersion("error")
+                .setTileTimeline(TimelineBuilders.Timeline.Builder().addTimelineEntry(TimelineBuilders.TimelineEntry.Builder().setLayout(LayoutElementBuilders.Layout.fromLayoutElement(LayoutElementBuilders.Text.Builder().setText("Error").build())).build()).build())
+                .build()
         }
 
         val future = ResolvableFuture.create<TileBuilders.Tile>()

@@ -18,6 +18,8 @@ class AirQualityTileService : TileService() {
     override fun onTileRequest(requestParams: RequestBuilders.TileRequest): ListenableFuture<TileBuilders.Tile> {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
         val aqi = prefs.getString("aqi", "--") ?: "--"
+        val pm25 = prefs.getString("pm25", "--") ?: "--"
+        val pm10 = prefs.getString("pm10", "--") ?: "--"
         val timestamp = prefs.getLong("timestamp", 0)
 
         val launchAction = ActionBuilders.LaunchAction.Builder()
@@ -42,7 +44,9 @@ class AirQualityTileService : TileService() {
                     .build()
             )
             .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(12f)).build())
-            .addContent(
+
+        if (aqi != "--") {
+            rootColumn.addContent(
                 LayoutElementBuilders.Text.Builder()
                     .setText(aqi)
                     .setFontStyle(
@@ -61,6 +65,41 @@ class AirQualityTileService : TileService() {
                     .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(14f)).build())
                     .build()
             )
+        }
+
+        if (pm25 != "--" || pm10 != "--") {
+            rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
+            val pmRow = LayoutElementBuilders.Row.Builder()
+            if (pm25 != "--") {
+                pmRow.addContent(
+                    LayoutElementBuilders.Text.Builder()
+                        .setText("PM2.5: $pm25")
+                        .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(11f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
+                        .build()
+                )
+                if (pm10 != "--") {
+                    pmRow.addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(12f)).build())
+                }
+            }
+            if (pm10 != "--") {
+                pmRow.addContent(
+                    LayoutElementBuilders.Text.Builder()
+                        .setText("PM10: $pm10")
+                        .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(11f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
+                        .build()
+                )
+            }
+            rootColumn.addContent(pmRow.build())
+        }
+
+        if (aqi == "--" && pm25 == "--" && pm10 == "--") {
+            rootColumn.addContent(
+                LayoutElementBuilders.Text.Builder()
+                    .setText("No data available")
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(14f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
+                    .build()
+            )
+        }
 
         val tile = try {
             TileBuilders.Tile.Builder()

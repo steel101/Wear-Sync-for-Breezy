@@ -48,7 +48,9 @@ class UVTileService : TileService() {
                     .build()
             )
             .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(12f)).build())
-            .addContent(
+
+        if (uv != "--") {
+            rootColumn.addContent(
                 LayoutElementBuilders.Row.Builder()
                     .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
                     .addContent(
@@ -79,6 +81,14 @@ class UVTileService : TileService() {
                     .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(14f)).build())
                     .build()
             )
+        } else {
+            rootColumn.addContent(
+                LayoutElementBuilders.Text.Builder()
+                    .setText("No data available")
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(14f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
+                    .build()
+            )
+        }
 
         val tile = try {
             TileBuilders.Tile.Builder()

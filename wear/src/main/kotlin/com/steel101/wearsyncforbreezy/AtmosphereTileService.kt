@@ -20,6 +20,8 @@ class AtmosphereTileService : TileService() {
         val uv = prefs.getString("uv", "--") ?: "--"
         val pressure = prefs.getString("pressure", "--") ?: "--"
         val aqi = prefs.getString("aqi", "--") ?: "--"
+        val cloud = prefs.getString("cloud_cover", "--") ?: "--"
+        val ceiling = prefs.getString("ceiling", "--") ?: "--"
         val timestamp = prefs.getLong("timestamp", 0)
 
         val launchAction = ActionBuilders.LaunchAction.Builder()
@@ -56,9 +58,21 @@ class AtmosphereTileService : TileService() {
             rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(4f)).build())
         }
 
-        addEntry("UV Index", uv)
-        addEntry("Pressure", pressure)
-        addEntry("AQI", aqi)
+        var anyData = false
+        if (uv != "--") { addEntry("UV Index", uv); anyData = true }
+        if (pressure != "--") { addEntry("Pressure", pressure); anyData = true }
+        if (aqi != "--") { addEntry("AQI", aqi); anyData = true }
+        if (cloud != "--") { addEntry("Cloud Cover", cloud); anyData = true }
+        if (ceiling != "--") { addEntry("Ceiling", ceiling); anyData = true }
+
+        if (!anyData) {
+            rootColumn.addContent(
+                LayoutElementBuilders.Text.Builder()
+                    .setText("No data available")
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(14f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
+                    .build()
+            )
+        }
 
         val tile = try {
             TileBuilders.Tile.Builder()

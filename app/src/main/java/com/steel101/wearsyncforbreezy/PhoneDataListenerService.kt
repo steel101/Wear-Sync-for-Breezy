@@ -17,10 +17,10 @@ class PhoneDataListenerService : WearableListenerService() {
         Log.d(TAG, "onMessageReceived: ${messageEvent.path}")
         if (messageEvent.path == "/request_refresh") {
             scope.launch {
-                val data = BreezyDataFetcher.fetchAllWeatherData(this@PhoneDataListenerService)
-                if (data != null) {
-                    WearSyncHelper.syncWeather(this@PhoneDataListenerService, data)
-                    Log.d(TAG, "Manual refresh complete")
+                val locations = BreezyDataFetcher.fetchAllWeatherData(this@PhoneDataListenerService)
+                if (locations.isNotEmpty()) {
+                    WearSyncHelper.syncWeather(this@PhoneDataListenerService, locations)
+                    Log.d(TAG, "Manual refresh complete for ${locations.size} locations")
                 } else {
                     Log.w(TAG, "Manual refresh failed: No data found")
                 }

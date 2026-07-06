@@ -8,9 +8,7 @@ android {
     compileSdk = 37
 
     dependenciesInfo {
-        // Disables dependency metadata when building APKs (for IzzyOnDroid/F-Droid)
         includeInApk = false
-        // Disables dependency metadata when building Android App Bundles (for Google Play)
         includeInBundle = false
     }
 
@@ -19,7 +17,8 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0.28"
+        versionName = "1.0.29"
+        resConfigs("en")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -52,6 +51,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.play.services.wearable)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     implementation(project(":shared"))

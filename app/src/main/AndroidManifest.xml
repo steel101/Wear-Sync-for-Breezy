@@ -25,10 +25,7 @@
             </intent-filter>
         </activity>
 
-        <service
-            android:name=".WeatherUpdateService"
-            android:enabled="true"
-            android:exported="false" />
+
 
         <service
             android:name=".PhoneDataListenerService"

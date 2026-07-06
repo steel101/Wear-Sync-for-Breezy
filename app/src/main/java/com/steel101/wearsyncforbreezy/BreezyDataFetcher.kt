@@ -11,30 +11,33 @@ object BreezyDataFetcher {
     private const val TAG = "BreezyDataFetcher"
     private const val AUTHORITY = "org.breezyweather.provider.weather"
 
-    suspend fun fetchAllWeatherData(context: Context): BreezyLocation? = withContext(Dispatchers.IO) {
-        val data = fetchFromUri(context, AUTHORITY, "id=CURRENT_POSITION")
-        if (data != null) return@withContext data
+    suspend fun fetchAllWeatherData(context: Context): List<BreezyLocation> = withContext(Dispatchers.IO) {
+        val locations = mutableListOf<BreezyLocation>()
+        
+        // Try current position first
+        val current = fetchFromUri(context, AUTHORITY, "id=CURRENT_POSITION")
+        if (current != null) locations.add(current)
 
-        fetchFirstAvailableLocation(context, AUTHORITY)
-    }
-
-    private suspend fun fetchFirstAvailableLocation(context: Context, authority: String): BreezyLocation? {
+        // Then all other saved locations
         try {
-            val uri = Uri.parse("content://$authority/locations")
+            val uri = Uri.parse("content://$AUTHORITY/locations")
             val cursor = context.contentResolver.query(uri, null, null, null, null)
             cursor?.use {
-                if (it.moveToFirst()) {
-                    val idIndex = it.getColumnIndex("id")
-                    if (idIndex >= 0) {
-                        val locationId = it.getString(idIndex)
-                        return fetchFromUri(context, authority, "id=$locationId")
+                val idIndex = it.getColumnIndex("id")
+                if (idIndex >= 0) {
+                    while (it.moveToNext()) {
+                        val id = it.getString(idIndex)
+                        if (id == "CURRENT_POSITION") continue
+                        val loc = fetchFromUri(context, AUTHORITY, "id=$id")
+                        if (loc != null) locations.add(loc)
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.d(TAG, "Failed to fetch locations from $authority: ${e.message}")
+            Log.d(TAG, "Failed to fetch locations: ${e.message}")
         }
-        return null
+        
+        locations
     }
 
     private fun fetchFromUri(context: Context, authority: String, selection: String): BreezyLocation? {

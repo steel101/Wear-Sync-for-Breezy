@@ -12,13 +12,13 @@ import androidx.wear.watchface.complications.data.ShortTextComplicationData
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceService
 
-class FeelsLikeComplicationService : ComplicationDataSourceService() {
+class AqiComplicationService : ComplicationDataSourceService() {
     override fun onComplicationRequest(
         request: ComplicationRequest,
         listener: ComplicationRequestListener
     ) {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
-        val feelsLike = prefs.getString("feels_like", "--") ?: "--"
+        val aqi = prefs.getString("aqi", "--") ?: "--"
 
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -26,21 +26,21 @@ class FeelsLikeComplicationService : ComplicationDataSourceService() {
         val complicationData = when (request.complicationType) {
             ComplicationType.SHORT_TEXT -> {
                 ShortTextComplicationData.Builder(
-                    text = PlainComplicationText.Builder(feelsLike).build(),
-                    contentDescription = PlainComplicationText.Builder("Feels Like Temperature").build()
+                    text = PlainComplicationText.Builder(aqi).build(),
+                    contentDescription = PlainComplicationText.Builder("Air Quality Index").build()
                 ).setTapAction(pendingIntent).build()
             }
             ComplicationType.RANGED_VALUE -> {
-                val value = feelsLike.filter { it.isDigit() || it == '-' }.toFloatOrNull() ?: 0f
-                val color = WeatherUtils.getTempColor(feelsLike)
+                val value = aqi.toFloatOrNull() ?: 0f
+                val color = WeatherUtils.getAqiColor(aqi)
                 RangedValueComplicationData.Builder(
                     value = value,
-                    min = -20f,
-                    max = 120f,
-                    contentDescription = PlainComplicationText.Builder("Feels Like Temperature").build()
+                    min = 0f,
+                    max = 500f,
+                    contentDescription = PlainComplicationText.Builder("Air Quality Index").build()
                 )
-                .setText(PlainComplicationText.Builder(feelsLike).build())
-                .setTitle(PlainComplicationText.Builder("Feels").build())
+                .setText(PlainComplicationText.Builder(aqi).build())
+                .setTitle(PlainComplicationText.Builder("AQI").build())
                 .setColorRamp(ColorRamp(intArrayOf(color), true))
                 .setTapAction(pendingIntent)
                 .build()
@@ -54,19 +54,19 @@ class FeelsLikeComplicationService : ComplicationDataSourceService() {
         return when (type) {
             ComplicationType.SHORT_TEXT -> {
                 ShortTextComplicationData.Builder(
-                    text = PlainComplicationText.Builder("70°").build(),
-                    contentDescription = PlainComplicationText.Builder("Feels Like Temperature").build()
+                    text = PlainComplicationText.Builder("42").build(),
+                    contentDescription = PlainComplicationText.Builder("Air Quality Index").build()
                 ).build()
             }
             ComplicationType.RANGED_VALUE -> {
                 RangedValueComplicationData.Builder(
-                    value = 70f,
-                    min = -20f,
-                    max = 120f,
-                    contentDescription = PlainComplicationText.Builder("Feels Like Temperature").build()
+                    value = 42f,
+                    min = 0f,
+                    max = 500f,
+                    contentDescription = PlainComplicationText.Builder("Air Quality Index").build()
                 )
-                .setText(PlainComplicationText.Builder("70°").build())
-                .setTitle(PlainComplicationText.Builder("Feels").build())
+                .setText(PlainComplicationText.Builder("42").build())
+                .setTitle(PlainComplicationText.Builder("AQI").build())
                 .build()
             }
             else -> null

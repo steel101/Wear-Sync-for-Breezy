@@ -61,46 +61,51 @@ class WeatherTileService : TileService() {
             )
             .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(4f)).build())
 
-        rootColumn.addContent(
-            LayoutElementBuilders.Row.Builder()
-                .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
-                .addContent(
+        val mainRow = LayoutElementBuilders.Row.Builder()
+            .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
+            .addContent(
+                LayoutElementBuilders.Text.Builder()
+                    .setText(conditionIcon)
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(30f)).build())
+                    .build()
+            )
+            .addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(8f)).build())
+            .addContent(
+                LayoutElementBuilders.Text.Builder()
+                    .setText(temp)
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(34f)).build())
+                    .build()
+            )
+
+        if (tempMax != "--" || tempMin != "--") {
+            val tempRangeColumn = LayoutElementBuilders.Column.Builder()
+            if (tempMax != "--") {
+                tempRangeColumn.addContent(
                     LayoutElementBuilders.Text.Builder()
-                        .setText(conditionIcon)
-                        .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(30f)).build())
+                        .setText(tempMax)
+                        .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(13f)).build())
                         .build()
                 )
-                .addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(8f)).build())
-                .addContent(
+            }
+            if (tempMin != "--") {
+                tempRangeColumn.addContent(
                     LayoutElementBuilders.Text.Builder()
-                        .setText(temp)
-                        .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(34f)).build())
-                        .build()
-                )
-                .addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(8f)).build())
-                .addContent(
-                    LayoutElementBuilders.Column.Builder()
-                        .addContent(
-                            LayoutElementBuilders.Text.Builder()
-                                .setText(tempMax)
-                                .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(13f)).build())
+                        .setText(tempMin)
+                        .setFontStyle(
+                            LayoutElementBuilders.FontStyle.Builder()
+                                .setSize(DimensionBuilders.sp(13f))
+                                .setColor(ColorBuilders.argb(0xFFAAAAAA.toInt()))
                                 .build()
                         )
-                        .addContent(
-                            LayoutElementBuilders.Text.Builder()
-                                .setText(tempMin)
-                                .setFontStyle(
-                                    LayoutElementBuilders.FontStyle.Builder()
-                                        .setSize(DimensionBuilders.sp(13f))
-                                        .setColor(ColorBuilders.argb(0xFFAAAAAA.toInt()))
-                                        .build()
-                                )
-                                .build()
-                        )
                         .build()
                 )
-                .build()
-        )
+            }
+
+            mainRow.addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(8f)).build())
+            mainRow.addContent(tempRangeColumn.build())
+        }
+
+        rootColumn.addContent(mainRow.build())
 
         if (hCount > 0) {
             rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(12f)).build())
@@ -112,34 +117,49 @@ class WeatherTileService : TileService() {
                 val hTime = sharedPrefs.getString("h_time_$i", "") ?: ""
                 val hTemp = sharedPrefs.getString("h_temp_$i", "") ?: ""
                 val hIcon = sharedPrefs.getString("h_cond_icon_$i", "☀️") ?: "☀️"
+                val hPrecip = sharedPrefs.getString("h_precip_$i", "") ?: ""
 
-                hourlyRow.addContent(
-                    LayoutElementBuilders.Column.Builder()
-                        .addContent(
-                            LayoutElementBuilders.Text.Builder()
-                                .setText(hTemp)
-                                .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(13f)).build())
-                                .build()
-                        )
-                        .addContent(
-                            LayoutElementBuilders.Text.Builder()
-                                .setText(hIcon)
-                                .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(17f)).build())
-                                .build()
-                        )
-                        .addContent(
-                            LayoutElementBuilders.Text.Builder()
-                                .setText(hTime)
-                                .setFontStyle(
-                                    LayoutElementBuilders.FontStyle.Builder()
-                                        .setSize(DimensionBuilders.sp(11f))
-                                        .setColor(ColorBuilders.argb(0xFFAAAAAA.toInt()))
-                                        .build()
-                                )
+                val hColumn = LayoutElementBuilders.Column.Builder()
+                    .addContent(
+                        LayoutElementBuilders.Text.Builder()
+                            .setText(hTemp)
+                            .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(13f)).build())
+                            .build()
+                    )
+                    .addContent(
+                        LayoutElementBuilders.Text.Builder()
+                            .setText(hIcon)
+                            .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(17f)).build())
+                            .build()
+                    )
+
+                if (hPrecip.isNotEmpty()) {
+                    hColumn.addContent(
+                        LayoutElementBuilders.Text.Builder()
+                            .setText(hPrecip)
+                            .setFontStyle(
+                                LayoutElementBuilders.FontStyle.Builder()
+                                    .setSize(DimensionBuilders.sp(10f))
+                                    .setColor(ColorBuilders.argb(0xFF64B5F6.toInt()))
+                                    .build()
+                            )
+                            .build()
+                    )
+                }
+
+                hColumn.addContent(
+                    LayoutElementBuilders.Text.Builder()
+                        .setText(hTime)
+                        .setFontStyle(
+                            LayoutElementBuilders.FontStyle.Builder()
+                                .setSize(DimensionBuilders.sp(10f))
+                                .setColor(ColorBuilders.argb(0xFFAAAAAA.toInt()))
                                 .build()
                         )
                         .build()
                 )
+
+                hourlyRow.addContent(hColumn.build())
 
                 if (i < maxHourly - 1) {
                     hourlyRow.addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(10f)).build())

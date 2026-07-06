@@ -17,6 +17,8 @@ import androidx.concurrent.futures.ResolvableFuture
 class PrecipitationTileService : TileService() {
     override fun onTileRequest(requestParams: RequestBuilders.TileRequest): ListenableFuture<TileBuilders.Tile> {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
+        val rainChance = prefs.getString("precip_prob", "--") ?: "--"
+        val nextPrecip = prefs.getString("h_precip_0", "") ?: ""
         val humidity = prefs.getString("humidity", "--") ?: "--"
         val visibility = prefs.getString("visibility", "--") ?: "--"
         val dewPoint = prefs.getString("dew_point", "--") ?: "--"
@@ -56,9 +58,21 @@ class PrecipitationTileService : TileService() {
             rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(4f)).build())
         }
 
-        addEntry("Humidity", humidity)
-        addEntry("Visibility", visibility)
-        addEntry("Dew Point", dewPoint)
+        var anyData = false
+        if (humidity != "--") { addEntry("Humidity", humidity); anyData = true }
+        if (rainChance != "--") { addEntry("Rain Chance", rainChance); anyData = true }
+        if (nextPrecip.isNotEmpty()) { addEntry("Next Hour", nextPrecip); anyData = true }
+        if (visibility != "--") { addEntry("Visibility", visibility); anyData = true }
+        if (dewPoint != "--") { addEntry("Dew Point", dewPoint); anyData = true }
+
+        if (!anyData) {
+            rootColumn.addContent(
+                LayoutElementBuilders.Text.Builder()
+                    .setText("No data available")
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(14f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
+                    .build()
+            )
+        }
 
         val tile = try {
             TileBuilders.Tile.Builder()
