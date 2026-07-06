@@ -1,11 +1,10 @@
 name: Build Android APKs
 
 on:
-  push:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
+
   build:
     name: Build & Sign APKs
     runs-on: ubuntu-latest
