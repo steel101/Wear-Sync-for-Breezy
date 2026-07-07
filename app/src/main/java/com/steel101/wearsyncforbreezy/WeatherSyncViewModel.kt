@@ -150,7 +150,11 @@ class WeatherSyncViewModel : ViewModel() {
                     _uiState.value = SyncUiState.Success("Synced successfully!")
                     scheduleBackgroundSync(context, _autoSyncEnabled.value)
                 } else {
-                    _uiState.value = SyncUiState.Error("No data found. Open Breezy Weather first.")
+                    if (!isBreezyInstalled(context)) {
+                        _uiState.value = SyncUiState.Error("Breezy Weather not found. Please install it.")
+                    } else {
+                        _uiState.value = SyncUiState.Error("No data found. Open Breezy Weather and ensure 'External data access' is enabled in its settings.")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Sync operation failed", e)
