@@ -153,7 +153,7 @@ class WeatherSyncViewModel : ViewModel() {
                     if (!isBreezyInstalled(context)) {
                         _uiState.value = SyncUiState.Error("Breezy Weather not found. Please install it.")
                     } else {
-                        _uiState.value = SyncUiState.Error("No data found. Open Breezy Weather and ensure 'External data access' is enabled in its settings.")
+                        _uiState.value = SyncUiState.Error("No data found. Open Breezy Weather and ensure it is showing weather data")
                     }
                 }
             } catch (e: Exception) {
