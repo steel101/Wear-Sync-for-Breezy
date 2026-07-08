@@ -27,7 +27,7 @@ is a lightweight bridge application that seamlessly syncs detailed weather data 
 ## ✨ Key Features
 
 ### ⚙️ Automation & Core
-* **🔄 Automatic Background Sync:** Updates your watch every 45 minutes completely automatically.
+* **🔄 Automatic Background Sync:** Updates your watch every 1 hour completely automatically.
 * **⚡ Real-Time Updates:** Uses a `ContentObserver` to detect exactly when Breezy Weather refreshes, triggering an immediate watch sync.
 * **🌐 Local & Private:** **Zero internet access.** It only reads data locally from your phone and sends it locally to your watch.
 * **📐 Unit Support:** Automatically detects and respects your preferred system units (Celsius or Fahrenheit).
