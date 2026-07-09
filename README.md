@@ -11,6 +11,7 @@ is a lightweight bridge application that seamlessly syncs detailed weather data 
 > 
 > * **Do NOT report watch-related bugs to the Breezy Weather team:** The Breezy Weather maintainers will not take any bug reports, provide troubleshooting help, or offer support regarding this third-party Wear OS integration.
 > * **Where to get help:** If you encounter any bugs, sync issues, or setup problems, please leave all reports exclusively on **this repository's Issues page** so I can fix them for you. Thank you for your cooperation!
+> * or email me at steelvargas@gmail.com with things that need fixing 
 
 ---
 
