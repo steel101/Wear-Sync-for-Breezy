@@ -35,11 +35,13 @@ class HourlyTileService : TileService() {
 
         val rootColumn = LayoutElementBuilders.Column.Builder()
             .setModifiers(rootModifiers)
+            .setWidth(DimensionBuilders.expand())
             .addContent(
                 LayoutElementBuilders.Text.Builder()
                     .setText("Next 6 Hours")
                     .setFontStyle(LayoutElementBuilders.FontStyle.Builder()
                         .setSize(DimensionBuilders.sp(15f))
+                        .setWeight(LayoutElementBuilders.FONT_WEIGHT_BOLD)
                         .setColor(ColorBuilders.argb(0xFFFFFFFF.toInt()))
                         .build())
                     .build()
@@ -47,10 +49,10 @@ class HourlyTileService : TileService() {
             .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
 
         if (hCount > 0) {
-            val grid = LayoutElementBuilders.Column.Builder()
+            val grid = LayoutElementBuilders.Column.Builder().setWidth(DimensionBuilders.expand())
 
             for (row in 0 until 2) {
-                val rowLayout = LayoutElementBuilders.Row.Builder()
+                val rowLayout = LayoutElementBuilders.Row.Builder().setWidth(DimensionBuilders.expand())
                 var addedInRow = 0
                 for (col in 0 until 3) {
                     val i = row * 3 + col
@@ -60,22 +62,65 @@ class HourlyTileService : TileService() {
                         val hIcon = prefs.getString("h_cond_icon_$i", "☀️") ?: "☀️"
 
                         rowLayout.addContent(
-                            LayoutElementBuilders.Column.Builder()
-                                .addContent(LayoutElementBuilders.Text.Builder().setText(hTemp).setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(12f)).build()).build())
-                                .addContent(LayoutElementBuilders.Text.Builder().setText(hIcon).setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(16f)).build()).build())
-                                .addContent(LayoutElementBuilders.Text.Builder().setText(hTime).setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(10f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build()).build())
+                            LayoutElementBuilders.Box.Builder()
+                                .setWidth(DimensionBuilders.expand())
+                                .addContent(
+                                    LayoutElementBuilders.Column.Builder()
+                                        .addContent(LayoutElementBuilders.Text.Builder().setText(hTemp).setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(12f)).build()).build())
+                                        .addContent(LayoutElementBuilders.Text.Builder().setText(hIcon).setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(16f)).build()).build())
+                                        .addContent(LayoutElementBuilders.Text.Builder().setText(hTime).setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(10f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build()).build())
+                                        .build()
+                                )
                                 .build()
                         )
-                        if (col < 2 && i < hCount - 1) rowLayout.addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(12f)).build())
+
+                        // Vertical Grid Line
+                        if (col < 2 && i < hCount - 1) {
+                            rowLayout.addContent(
+                                LayoutElementBuilders.Box.Builder()
+                                    .setWidth(DimensionBuilders.dp(1f))
+                                    .setHeight(DimensionBuilders.expand())
+                                    .setModifiers(ModifiersBuilders.Modifiers.Builder()
+                                        .setBackground(ModifiersBuilders.Background.Builder().setColor(ColorBuilders.argb(0x22FFFFFF)).build())
+                                        .build())
+                                    .build()
+                            )
+                        }
                         addedInRow++
                     }
                 }
                 if (addedInRow > 0) {
                     grid.addContent(rowLayout.build())
-                    if (row == 0 && hCount > 3) grid.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
+
+                    // Horizontal Row Line
+                    if (row == 0 && hCount > 3) {
+                        grid.addContent(
+                            LayoutElementBuilders.Box.Builder()
+                                .setWidth(DimensionBuilders.expand())
+                                .setHeight(DimensionBuilders.dp(1f))
+                                .setModifiers(ModifiersBuilders.Modifiers.Builder()
+                                    .setBackground(ModifiersBuilders.Background.Builder().setColor(ColorBuilders.argb(0x22FFFFFF)).build())
+                                    .setPadding(ModifiersBuilders.Padding.Builder().setTop(DimensionBuilders.dp(4f)).setBottom(DimensionBuilders.dp(4f)).build())
+                                    .build())
+                                .build()
+                        )
+                    }
                 }
             }
-            rootColumn.addContent(grid.build())
+
+            rootColumn.addContent(
+                LayoutElementBuilders.Box.Builder()
+                    .setWidth(DimensionBuilders.expand())
+                    .setModifiers(ModifiersBuilders.Modifiers.Builder()
+                        .setBackground(ModifiersBuilders.Background.Builder()
+                            .setColor(ColorBuilders.argb(0xFF1A1A1A.toInt()))
+                            .setCorner(ModifiersBuilders.Corner.Builder().setRadius(DimensionBuilders.dp(16f)).build())
+                            .build())
+                        .setPadding(ModifiersBuilders.Padding.Builder().setAll(DimensionBuilders.dp(8f)).build())
+                        .build())
+                    .addContent(grid.build())
+                    .build()
+            )
         } else {
             rootColumn.addContent(
                 LayoutElementBuilders.Text.Builder()

@@ -19,14 +19,19 @@ class WeatherTileService : TileService() {
 
     override fun onTileRequest(requestParams: RequestBuilders.TileRequest): ListenableFuture<TileBuilders.Tile> {
         val sharedPrefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
-        val temp = sharedPrefs.getString("temp", "--") ?: "--"
-        val tempMax = sharedPrefs.getString("temp_max", "--") ?: "--"
-        val tempMin = sharedPrefs.getString("temp_min", "--") ?: "--"
-        val conditionIcon = sharedPrefs.getString("cond_icon", "☀️") ?: "☀️"
-        val city = sharedPrefs.getString("city", "Breezy") ?: "Breezy"
+
+        // Multi-location support (if implemented in future, defaults to 0)
+        val locationIndex = sharedPrefs.getInt("location_index", 0)
+        val prefix = if (locationIndex == 0) "" else "loc_${locationIndex}_"
+
+        val temp = sharedPrefs.getString("${prefix}temp", "--") ?: "--"
+        val tempMax = sharedPrefs.getString("${prefix}temp_max", "--") ?: "--"
+        val tempMin = sharedPrefs.getString("${prefix}temp_min", "--") ?: "--"
+        val conditionIcon = sharedPrefs.getString("${prefix}cond_icon", "☀️") ?: "☀️"
+        val city = sharedPrefs.getString("${prefix}city", "Breezy") ?: "Breezy"
         val timestamp = sharedPrefs.getLong("timestamp", 0)
 
-        val hCount = sharedPrefs.getInt("h_count", 0)
+        val hCount = sharedPrefs.getInt("${prefix}h_count", 0)
 
         val launchAction = ActionBuilders.LaunchAction.Builder()
             .setAndroidActivity(
@@ -48,130 +53,86 @@ class WeatherTileService : TileService() {
 
         val rootColumn = LayoutElementBuilders.Column.Builder()
             .setModifiers(rootModifiers)
-            .addContent(
-                LayoutElementBuilders.Text.Builder()
-                    .setText(city)
-                    .setFontStyle(
-                        LayoutElementBuilders.FontStyle.Builder()
-                            .setSize(DimensionBuilders.sp(15f))
-                            .setColor(ColorBuilders.argb(0xDDFFFFFF.toInt()))
-                            .build()
-                    )
-                    .build()
-            )
-            .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(4f)).build())
+            .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
+            .setWidth(DimensionBuilders.expand())
+
+        rootColumn.addContent(
+            LayoutElementBuilders.Text.Builder()
+                .setText(city)
+                .setFontStyle(
+                    LayoutElementBuilders.FontStyle.Builder()
+                        .setSize(DimensionBuilders.sp(14f))
+                        .setColor(ColorBuilders.argb(0x88FFFFFF.toInt()))
+                        .build()
+                )
+                .build()
+        )
+        rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(4f)).build())
 
         val mainRow = LayoutElementBuilders.Row.Builder()
             .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
             .addContent(
                 LayoutElementBuilders.Text.Builder()
                     .setText(conditionIcon)
-                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(30f)).build())
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(32f)).build())
                     .build()
             )
-            .addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(8f)).build())
+            .addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(12f)).build())
             .addContent(
                 LayoutElementBuilders.Text.Builder()
                     .setText(temp)
-                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(34f)).build())
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(38f)).setWeight(LayoutElementBuilders.FONT_WEIGHT_BOLD).build())
                     .build()
             )
 
-        if (tempMax != "--" || tempMin != "--") {
-            val tempRangeColumn = LayoutElementBuilders.Column.Builder()
-            if (tempMax != "--") {
-                tempRangeColumn.addContent(
-                    LayoutElementBuilders.Text.Builder()
-                        .setText(tempMax)
-                        .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(13f)).build())
-                        .build()
-                )
-            }
-            if (tempMin != "--") {
-                tempRangeColumn.addContent(
-                    LayoutElementBuilders.Text.Builder()
-                        .setText(tempMin)
-                        .setFontStyle(
-                            LayoutElementBuilders.FontStyle.Builder()
-                                .setSize(DimensionBuilders.sp(13f))
-                                .setColor(ColorBuilders.argb(0xFFAAAAAA.toInt()))
-                                .build()
-                        )
-                        .build()
-                )
-            }
-
-            mainRow.addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(8f)).build())
-            mainRow.addContent(tempRangeColumn.build())
-        }
-
         rootColumn.addContent(mainRow.build())
 
+        if (tempMax != "--" || tempMin != "--") {
+            rootColumn.addContent(
+                LayoutElementBuilders.Text.Builder()
+                    .setText("H: $tempMax  L: $tempMin")
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(13f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
+                    .build()
+            )
+        }
+
         if (hCount > 0) {
-            rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(12f)).build())
+            rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(10f)).build())
 
             val hourlyRow = LayoutElementBuilders.Row.Builder()
                 .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
+                .setWidth(DimensionBuilders.expand())
+
             val maxHourly = minOf(hCount, 3)
             for (i in 0 until maxHourly) {
-                val hTime = sharedPrefs.getString("h_time_$i", "") ?: ""
-                val hTemp = sharedPrefs.getString("h_temp_$i", "") ?: ""
-                val hIcon = sharedPrefs.getString("h_cond_icon_$i", "☀️") ?: "☀️"
-                val hPrecip = sharedPrefs.getString("h_precip_$i", "") ?: ""
+                val hTime = sharedPrefs.getString("${prefix}h_time_$i", "") ?: ""
+                val hTemp = sharedPrefs.getString("${prefix}h_temp_$i", "") ?: ""
+                val hIcon = sharedPrefs.getString("${prefix}h_cond_icon_$i", "☀️") ?: "☀️"
 
                 val hColumn = LayoutElementBuilders.Column.Builder()
-                    .addContent(
-                        LayoutElementBuilders.Text.Builder()
-                            .setText(hTemp)
-                            .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(13f)).build())
-                            .build()
-                    )
-                    .addContent(
-                        LayoutElementBuilders.Text.Builder()
-                            .setText(hIcon)
-                            .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(17f)).build())
-                            .build()
-                    )
+                    .addContent(LayoutElementBuilders.Text.Builder().setText(hTime).setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(10f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build()).build())
+                    .addContent(LayoutElementBuilders.Text.Builder().setText(hIcon).setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(16f)).build()).build())
+                    .addContent(LayoutElementBuilders.Text.Builder().setText(hTemp).setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(12f)).setWeight(LayoutElementBuilders.FONT_WEIGHT_BOLD).build()).build())
 
-                if (hPrecip.isNotEmpty()) {
-                    hColumn.addContent(
-                        LayoutElementBuilders.Text.Builder()
-                            .setText(hPrecip)
-                            .setFontStyle(
-                                LayoutElementBuilders.FontStyle.Builder()
-                                    .setSize(DimensionBuilders.sp(10f))
-                                    .setColor(ColorBuilders.argb(0xFF64B5F6.toInt()))
-                                    .build()
-                            )
-                            .build()
-                    )
-                }
-
-                hColumn.addContent(
-                    LayoutElementBuilders.Text.Builder()
-                        .setText(hTime)
-                        .setFontStyle(
-                            LayoutElementBuilders.FontStyle.Builder()
-                                .setSize(DimensionBuilders.sp(10f))
-                                .setColor(ColorBuilders.argb(0xFFAAAAAA.toInt()))
-                                .build()
-                        )
-                        .build()
-                )
-
-                hourlyRow.addContent(hColumn.build())
-
-                if (i < maxHourly - 1) {
-                    hourlyRow.addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(10f)).build())
-                }
+                hourlyRow.addContent(LayoutElementBuilders.Box.Builder().setWidth(DimensionBuilders.expand()).addContent(hColumn.build()).build())
             }
-            rootColumn.addContent(hourlyRow.build())
-        } else {
-            rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
+
             rootColumn.addContent(
-                LayoutElementBuilders.Text.Builder()
-                    .setText("No data synced")
-                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(12f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
+                LayoutElementBuilders.Box.Builder()
+                    .setWidth(DimensionBuilders.expand())
+                    .setModifiers(ModifiersBuilders.Modifiers.Builder()
+                        .setBackground(ModifiersBuilders.Background.Builder()
+                            .setColor(ColorBuilders.argb(0xFF1A1A1A.toInt()))
+                            .setCorner(ModifiersBuilders.Corner.Builder().setRadius(DimensionBuilders.dp(16f)).build())
+                            .build())
+                        .setPadding(ModifiersBuilders.Padding.Builder()
+                            .setStart(DimensionBuilders.dp(12f))
+                            .setEnd(DimensionBuilders.dp(12f))
+                            .setTop(DimensionBuilders.dp(8f))
+                            .setBottom(DimensionBuilders.dp(8f))
+                            .build())
+                        .build())
+                    .addContent(hourlyRow.build())
                     .build()
             )
         }
@@ -186,7 +147,11 @@ class WeatherTileService : TileService() {
                             TimelineBuilders.TimelineEntry.Builder()
                                 .setLayout(
                                     LayoutElementBuilders.Layout.fromLayoutElement(
-                                        rootColumn.build()
+                                        LayoutElementBuilders.Box.Builder()
+                                            .setWidth(DimensionBuilders.expand())
+                                            .setHeight(DimensionBuilders.expand())
+                                            .addContent(rootColumn.build())
+                                            .build()
                                     )
                                 )
                                 .build()

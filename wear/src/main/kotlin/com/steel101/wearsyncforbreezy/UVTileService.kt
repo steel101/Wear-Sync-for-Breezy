@@ -35,12 +35,27 @@ class UVTileService : TileService() {
             .setClickable(ModifiersBuilders.Clickable.Builder().setId("launch").setOnClick(launchAction).build())
             .build()
 
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        val isNight = hour !in 6..18
-        val icon = WeatherUtils.toEmoji("clear", isNight)
+        val uvVal = uv.toDoubleOrNull() ?: 0.0
+        val uvColor = getUvColor(uv)
+
+        val arc = LayoutElementBuilders.Arc.Builder()
+            .addContent(
+                LayoutElementBuilders.ArcLine.Builder()
+                    .setLength(DimensionBuilders.degrees(360f))
+                    .setThickness(DimensionBuilders.dp(4f))
+                    .setColor(ColorBuilders.argb(0x22FFFFFF))
+                    .build()
+            )
+            .addContent(
+                LayoutElementBuilders.ArcLine.Builder()
+                    .setLength(DimensionBuilders.degrees((uvVal.coerceIn(0.0, 12.0) / 12.0 * 360.0).toFloat()))
+                    .setThickness(DimensionBuilders.dp(4f))
+                    .setColor(uvColor)
+                    .build()
+            )
 
         val rootColumn = LayoutElementBuilders.Column.Builder()
-            .setModifiers(rootModifiers)
+            .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
             .addContent(
                 LayoutElementBuilders.Text.Builder()
                     .setText("UV Index")
@@ -51,40 +66,28 @@ class UVTileService : TileService() {
 
         if (uv != "--") {
             rootColumn.addContent(
-                LayoutElementBuilders.Row.Builder()
-                    .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
-                    .addContent(
-                        LayoutElementBuilders.Text.Builder()
-                            .setText(icon)
-                            .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(24f)).build())
-                            .build()
-                    )
-                    .addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(8f)).build())
-                    .addContent(
-                        LayoutElementBuilders.Text.Builder()
-                            .setText(uv)
-                            .setFontStyle(
-                                LayoutElementBuilders.FontStyle.Builder()
-                                    .setSize(DimensionBuilders.sp(36f))
-                                    .setWeight(LayoutElementBuilders.FONT_WEIGHT_BOLD)
-                                    .setColor(getUvColor(uv))
-                                    .build()
-                            )
+                LayoutElementBuilders.Text.Builder()
+                    .setText(uv)
+                    .setFontStyle(
+                        LayoutElementBuilders.FontStyle.Builder()
+                            .setSize(DimensionBuilders.sp(42f))
+                            .setWeight(LayoutElementBuilders.FONT_WEIGHT_BOLD)
+                            .setColor(uvColor)
                             .build()
                     )
                     .build()
             )
-            .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
-            .addContent(
+            rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
+            rootColumn.addContent(
                 LayoutElementBuilders.Text.Builder()
                     .setText(getUvLabel(uv))
-                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(14f)).build())
+                    .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(16f)).build())
                     .build()
             )
         } else {
             rootColumn.addContent(
                 LayoutElementBuilders.Text.Builder()
-                    .setText("No data available")
+                    .setText("No data")
                     .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(14f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
                     .build()
             )
@@ -102,6 +105,8 @@ class UVTileService : TileService() {
                                         LayoutElementBuilders.Box.Builder()
                                             .setWidth(DimensionBuilders.expand())
                                             .setHeight(DimensionBuilders.expand())
+                                            .setModifiers(rootModifiers)
+                                            .addContent(arc.build())
                                             .addContent(rootColumn.build())
                                             .build()
                                     )

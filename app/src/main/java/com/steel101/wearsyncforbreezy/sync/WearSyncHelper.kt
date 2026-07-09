@@ -21,8 +21,8 @@ object WearSyncHelper {
         if (locations.isEmpty()) return
         
         try {
-            val dataClient = Wearable.getDataClient(context)
-            val nodes = Wearable.getNodeClient(context).connectedNodes.await()
+            val dataClient = Wearable.getNodeClient(context)
+            val nodes = dataClient.connectedNodes.await()
             if (nodes.isEmpty()) return
 
             val putDataMapReq = PutDataMapRequest.create(PATH_WEATHER)
@@ -41,7 +41,7 @@ object WearSyncHelper {
             }
 
             val request = putDataMapReq.asPutDataRequest().setUrgent()
-            dataClient.putDataItem(request).await()
+            Wearable.getDataClient(context).putDataItem(request).await()
 
             for (node in nodes) {
                 Wearable.getMessageClient(context).sendMessage(node.id, PATH_FORCE_UPDATE, byteArrayOf(1)).await()
@@ -74,7 +74,10 @@ object WearSyncHelper {
         dataMap.putString("${prefix}temp", currentTemp?.let { "${it.toInt()}$fullUnit" } ?: "--")
         dataMap.putString("${prefix}condition", current?.weatherText ?: "--")
         
-        val isDay = weather.hourly?.firstOrNull()?.isDaylight ?: true
+        // Robust isDaylight check using closest hourly forecast
+        val nowTs = System.currentTimeMillis()
+        val isDay = weather.hourly?.minByOrNull { Math.abs((if (it.date < 10000000000L) it.date * 1000 else it.date) - nowTs) }?.isDaylight ?: true
+        
         dataMap.putString("${prefix}cond_icon", WeatherUtils.toEmoji(current?.weatherCode, !isDay))
         dataMap.putBoolean("${prefix}is_daylight", isDay)
         
@@ -85,7 +88,7 @@ object WearSyncHelper {
         dataMap.putString("${prefix}humidity", humidity?.let { "${it.toInt()}%" } ?: "--")
 
         val uv = current?.uV?.value
-        dataMap.putString("${prefix}uv", uv?.let { String.format("%.1f", it) } ?: "--")
+        dataMap.putString("${prefix}uv", uv?.let { String.format(Locale.US, "%.1f", it) } ?: "--")
 
         val visibility = current?.visibility
         dataMap.putString("${prefix}visibility", visibility?.let { v -> "${v.value?.toInt()} ${v.unit ?: "mi"}" } ?: "--")
@@ -123,23 +126,34 @@ object WearSyncHelper {
         val pressure = current?.pressure
         dataMap.putString("${prefix}pressure", pressure?.let { p ->
             val unit = if (p.unit?.contains("in", true) == true) "inHg" else (p.unit ?: "hPa")
-            val value = if (unit == "inHg") String.format("%.2f", p.value) else p.value?.toInt().toString()
+            val value = if (unit == "inHg") String.format(Locale.US, "%.2f", p.value) else p.value?.toInt().toString()
             "$value $unit"
         } ?: "--")
 
-        val aqi = current?.airQuality?.index?.value
-        dataMap.putString("${prefix}aqi", aqi?.toInt()?.toString() ?: "--")
-
-        val pollen = firstDaily?.pollen
-        dataMap.putString("${prefix}pollen_tree", pollen?.get("tree")?.let { "${it.concentration?.value?.toInt() ?: ""} ${it.concentration?.description ?: ""}" } ?: "--")
-        dataMap.putString("${prefix}pollen_grass", pollen?.get("grass")?.let { "${it.concentration?.value?.toInt() ?: ""} ${it.concentration?.description ?: ""}" } ?: "--")
-        dataMap.putString("${prefix}pollen_weed", pollen?.get("weed")?.let { "${it.concentration?.value?.toInt() ?: ""} ${it.concentration?.description ?: ""}" } ?: "--")
-
-        val pm25 = current?.airQuality?.pollutants?.get("PM2_5")?.concentration?.value
-        dataMap.putString("${prefix}pm25", pm25?.let { String.format("%.1f", it) } ?: "--")
-        
-        val pm10 = current?.airQuality?.pollutants?.get("PM10")?.concentration?.value
-        dataMap.putString("${prefix}pm10", pm10?.let { String.format("%.1f", it) } ?: "--")
+        dataMap.putString("${prefix}aqi", current?.airQuality?.index?.value?.toInt()?.toString() ?: "--")
+        current?.airQuality?.let { aqi ->
+            val index = aqi.index?.value?.toInt() ?: 0
+            val cat = when {
+                index <= 50 -> "Good"
+                index <= 100 -> "Moderate"
+                index <= 150 -> "Unhealthy (SG)"
+                index <= 200 -> "Unhealthy"
+                index <= 300 -> "Very Unhealthy"
+                else -> "Hazardous"
+            }
+            dataMap.putString("${prefix}aqi_name", cat)
+            val colorStr = when {
+                index <= 50 -> "#00E400"
+                index <= 100 -> "#FFFF00"
+                index <= 150 -> "#FF7E00"
+                index <= 200 -> "#FF0000"
+                index <= 300 -> "#8F3F97"
+                else -> "#7E0023"
+            }
+            try {
+                dataMap.putInt("${prefix}aqi_color", android.graphics.Color.parseColor(colorStr))
+            } catch (_: Exception) {}
+        }
 
         val alerts = weather.alerts
         if (!alerts.isNullOrEmpty()) {
@@ -147,11 +161,32 @@ object WearSyncHelper {
             alerts.forEachIndexed { i, alert ->
                 dataMap.putString("${prefix}alert_title_$i", alert.headline ?: "Weather Alert")
                 dataMap.putString("${prefix}alert_desc_$i", alert.description ?: "")
+                dataMap.putString("${prefix}alert_instr_$i", alert.instruction ?: "")
+                dataMap.putString("${prefix}alert_source_$i", alert.source ?: "")
                 dataMap.putInt("${prefix}alert_severity_$i", alert.severity)
+                dataMap.putString("${prefix}alert_color_$i", alert.color ?: "")
             }
         } else {
             dataMap.putInt("${prefix}alert_count", 0)
         }
+
+        // Minutely (Nowcast)
+        val minutely = weather.minutely
+        if (!minutely.isNullOrEmpty()) {
+            dataMap.putInt("${prefix}min_count", minutely.size)
+            for (i in minutely.indices) {
+                val m = minutely[i]
+                dataMap.putLong("${prefix}min_time_$i", m.date)
+                dataMap.putDouble("${prefix}min_val_$i", m.precipitationIntensity?.value ?: 0.0)
+            }
+        } else {
+            dataMap.putInt("${prefix}min_count", 0)
+        }
+
+        val pollen = firstDaily?.pollen
+        dataMap.putString("${prefix}pollen_tree", pollen?.get("tree")?.let { "${it.concentration?.value?.toInt() ?: ""} ${it.concentration?.description ?: ""}" } ?: "--")
+        dataMap.putString("${prefix}pollen_grass", pollen?.get("grass")?.let { "${it.concentration?.value?.toInt() ?: ""} ${it.concentration?.description ?: ""}" } ?: "--")
+        dataMap.putString("${prefix}pollen_weed", pollen?.get("weed")?.let { "${it.concentration?.value?.toInt() ?: ""} ${it.concentration?.description ?: ""}" } ?: "--")
 
         if (!daily.isNullOrEmpty()) {
             val count = minOf(daily.size, 7)
@@ -169,26 +204,25 @@ object WearSyncHelper {
             }
         }
 
-        val hourly = weather.hourly
-        if (!hourly.isNullOrEmpty()) {
-            val now = System.currentTimeMillis()
-                val futureHours = hourly.filter { 
-                    val time = if (it.date < 10000000000L) it.date * 1000 else it.date
-                    time > now - 3600000 
-                }.take(24)
+        val hourlyList = weather.hourly
+        if (!hourlyList.isNullOrEmpty()) {
+            val futureHours = hourlyList.filter {
+                val time = if (it.date < 10000000000L) it.date * 1000 else it.date
+                time > nowTs - 3600000
+            }.take(24)
 
-                dataMap.putInt("${prefix}h_count", futureHours.size)
-                for (i in futureHours.indices) {
-                    val h = futureHours[i]
-                    dataMap.putString("${prefix}h_time_$i", extractTime(h.date))
-                    dataMap.putString("${prefix}h_temp_$i", h.temperature?.temperature?.value?.let { "${it.toInt()}°" } ?: "--")
-                    dataMap.putString("${prefix}h_cond_icon_$i", WeatherUtils.toEmoji(h.weatherCode, h.isDaylight == false))
-                    dataMap.putString("${prefix}h_cond_$i", h.weatherText ?: "")
-                    val precipVal = h.precipitationProbability?.total?.value?.toInt() ?: 0
-                    dataMap.putInt("${prefix}h_precip_val_$i", precipVal)
-                    dataMap.putString("${prefix}h_precip_$i", if (precipVal > 0) "$precipVal%" else "")
-                }
+            dataMap.putInt("${prefix}h_count", futureHours.size)
+            for (i in futureHours.indices) {
+                val h = futureHours[i]
+                dataMap.putString("${prefix}h_time_$i", extractTime(h.date))
+                dataMap.putString("${prefix}h_temp_$i", h.temperature?.temperature?.value?.let { "${it.toInt()}°" } ?: "--")
+                dataMap.putString("${prefix}h_cond_icon_$i", WeatherUtils.toEmoji(h.weatherCode, h.isDaylight == false))
+                dataMap.putString("${prefix}h_cond_$i", h.weatherText ?: "")
+                val precipVal = h.precipitationProbability?.total?.value?.toInt() ?: 0
+                dataMap.putInt("${prefix}h_precip_val_$i", precipVal)
+                dataMap.putString("${prefix}h_precip_$i", if (precipVal > 0) "$precipVal%" else "")
             }
+        }
     }
 
     private fun extractDate(time: Long): String {

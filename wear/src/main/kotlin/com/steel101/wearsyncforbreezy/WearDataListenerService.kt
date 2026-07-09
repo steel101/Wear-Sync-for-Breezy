@@ -125,6 +125,8 @@ class WearDataListenerService : WearableListenerService() {
         editor.putString("${prefix}wind_gusts", dataMap.getString("${prefix}wind_gusts") ?: "")
         editor.putString("${prefix}wind_bf", dataMap.getString("${prefix}wind_bf") ?: "--")
         editor.putString("${prefix}aqi", dataMap.getString("${prefix}aqi") ?: "--")
+        editor.putString("${prefix}aqi_name", dataMap.getString("${prefix}aqi_name") ?: "")
+        editor.putInt("${prefix}aqi_color", dataMap.getInt("${prefix}aqi_color"))
         editor.putString("${prefix}pm25", dataMap.getString("${prefix}pm25") ?: "--")
         editor.putString("${prefix}pm10", dataMap.getString("${prefix}pm10") ?: "--")
         editor.putString("${prefix}visibility", dataMap.getString("${prefix}visibility") ?: "--")
@@ -146,15 +148,28 @@ class WearDataListenerService : WearableListenerService() {
         for (i in 0 until alertCount) {
             val title = dataMap.getString("${prefix}alert_title_$i") ?: ""
             val desc = dataMap.getString("${prefix}alert_desc_$i") ?: ""
+            val instr = dataMap.getString("${prefix}alert_instr_$i") ?: ""
+            val source = dataMap.getString("${prefix}alert_source_$i") ?: ""
             val severity = dataMap.getInt("${prefix}alert_severity_$i")
+            val color = dataMap.getString("${prefix}alert_color_$i") ?: ""
             
             editor.putString("${prefix}alert_title_$i", title)
             editor.putString("${prefix}alert_desc_$i", desc)
+            editor.putString("${prefix}alert_instr_$i", instr)
+            editor.putString("${prefix}alert_source_$i", source)
             editor.putInt("${prefix}alert_severity_$i", severity)
+            editor.putString("${prefix}alert_color_$i", color)
             
             if (severity >= 3 && prefix == "") { // Only show notifications for primary location
                 showNotification(title, desc, severity)
             }
+        }
+
+        val minCount = dataMap.getInt("${prefix}min_count")
+        editor.putInt("${prefix}min_count", minCount)
+        for (i in 0 until minCount) {
+            editor.putLong("${prefix}min_time_$i", dataMap.getLong("${prefix}min_time_$i"))
+            editor.putFloat("${prefix}min_val_$i", dataMap.getDouble("${prefix}min_val_$i").toFloat())
         }
 
         val fcCount = dataMap.getInt("${prefix}fc_count")

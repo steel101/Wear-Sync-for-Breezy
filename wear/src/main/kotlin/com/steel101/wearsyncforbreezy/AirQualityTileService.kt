@@ -18,8 +18,6 @@ class AirQualityTileService : TileService() {
     override fun onTileRequest(requestParams: RequestBuilders.TileRequest): ListenableFuture<TileBuilders.Tile> {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
         val aqi = prefs.getString("aqi", "--") ?: "--"
-        val pm25 = prefs.getString("pm25", "--") ?: "--"
-        val pm10 = prefs.getString("pm10", "--") ?: "--"
         val timestamp = prefs.getLong("timestamp", 0)
 
         val launchAction = ActionBuilders.LaunchAction.Builder()
@@ -35,8 +33,27 @@ class AirQualityTileService : TileService() {
             .setClickable(ModifiersBuilders.Clickable.Builder().setId("launch").setOnClick(launchAction).build())
             .build()
 
+        val aqiVal = aqi.toDoubleOrNull() ?: 0.0
+        val aqiColor = getAqiColor(aqi)
+
+        val arc = LayoutElementBuilders.Arc.Builder()
+            .addContent(
+                LayoutElementBuilders.ArcLine.Builder()
+                    .setLength(DimensionBuilders.degrees(360f))
+                    .setThickness(DimensionBuilders.dp(4f))
+                    .setColor(ColorBuilders.argb(0x22FFFFFF))
+                    .build()
+            )
+            .addContent(
+                LayoutElementBuilders.ArcLine.Builder()
+                    .setLength(DimensionBuilders.degrees((aqiVal.coerceIn(0.0, 300.0) / 300.0 * 360.0).toFloat()))
+                    .setThickness(DimensionBuilders.dp(4f))
+                    .setColor(aqiColor)
+                    .build()
+            )
+
         val rootColumn = LayoutElementBuilders.Column.Builder()
-            .setModifiers(rootModifiers)
+            .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
             .addContent(
                 LayoutElementBuilders.Text.Builder()
                     .setText("Air Quality")
@@ -51,51 +68,24 @@ class AirQualityTileService : TileService() {
                     .setText(aqi)
                     .setFontStyle(
                         LayoutElementBuilders.FontStyle.Builder()
-                            .setSize(DimensionBuilders.sp(36f))
+                            .setSize(DimensionBuilders.sp(42f))
                             .setWeight(LayoutElementBuilders.FONT_WEIGHT_BOLD)
-                            .setColor(getAqiColor(aqi))
+                            .setColor(aqiColor)
                             .build()
                     )
                     .build()
             )
-            .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
-            .addContent(
+            rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
+            rootColumn.addContent(
                 LayoutElementBuilders.Text.Builder()
                     .setText(getAqiLabel(aqi))
                     .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(14f)).build())
                     .build()
             )
-        }
-
-        if (pm25 != "--" || pm10 != "--") {
-            rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(8f)).build())
-            val pmRow = LayoutElementBuilders.Row.Builder()
-            if (pm25 != "--") {
-                pmRow.addContent(
-                    LayoutElementBuilders.Text.Builder()
-                        .setText("PM2.5: $pm25")
-                        .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(11f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
-                        .build()
-                )
-                if (pm10 != "--") {
-                    pmRow.addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(12f)).build())
-                }
-            }
-            if (pm10 != "--") {
-                pmRow.addContent(
-                    LayoutElementBuilders.Text.Builder()
-                        .setText("PM10: $pm10")
-                        .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(11f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
-                        .build()
-                )
-            }
-            rootColumn.addContent(pmRow.build())
-        }
-
-        if (aqi == "--" && pm25 == "--" && pm10 == "--") {
+        } else {
             rootColumn.addContent(
                 LayoutElementBuilders.Text.Builder()
-                    .setText("No data available")
+                    .setText("No data")
                     .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(14f)).setColor(ColorBuilders.argb(0xFFAAAAAA.toInt())).build())
                     .build()
             )
@@ -113,6 +103,8 @@ class AirQualityTileService : TileService() {
                                         LayoutElementBuilders.Box.Builder()
                                             .setWidth(DimensionBuilders.expand())
                                             .setHeight(DimensionBuilders.expand())
+                                            .setModifiers(rootModifiers)
+                                            .addContent(arc.build())
                                             .addContent(rootColumn.build())
                                             .build()
                                     )
@@ -151,9 +143,9 @@ class AirQualityTileService : TileService() {
         return when {
             value <= 50 -> "Good"
             value <= 100 -> "Moderate"
-            value <= 150 -> "Unhealthy for Sensitive Groups"
+            value <= 150 -> "Sensitive"
             value <= 200 -> "Unhealthy"
-            value <= 300 -> "Very Unhealthy"
+            value <= 300 -> "V. Unhealthy"
             else -> "Hazardous"
         }
     }
