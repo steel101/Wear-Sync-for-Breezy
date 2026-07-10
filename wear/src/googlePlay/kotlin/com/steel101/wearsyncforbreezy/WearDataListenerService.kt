@@ -29,19 +29,45 @@ class WearDataListenerService : WearableListenerService() {
     private val CHANNEL_ID = "weather_alerts"
 
     override fun onMessageReceived(messageEvent: MessageEvent) {
-        if (messageEvent.path == "/force_update") {
-            scope.launch {
-                val dataClient = Wearable.getDataClient(this@WearDataListenerService)
-                try {
-                    val dataItems = dataClient.dataItems.await()
-                    dataItems.forEach { item ->
-                        if (item.uri.path == "/weather_data") {
-                            processWeatherData(DataMapItem.fromDataItem(item).dataMap)
+        when (messageEvent.path) {
+            "/force_update" -> {
+                scope.launch {
+                    val dataClient = Wearable.getDataClient(this@WearDataListenerService)
+                    try {
+                        val dataItems = dataClient.dataItems.await()
+                        dataItems.forEach { item ->
+                            if (item.uri.path == "/weather_data") {
+                                processWeatherData(DataMapItem.fromDataItem(item).dataMap)
+                            }
                         }
+                        dataItems.release()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to force update", e)
                     }
-                    dataItems.release()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to force update", e)
+                }
+            }
+            "/request_version" -> {
+                scope.launch {
+                    try {
+                        val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            packageManager.getPackageInfo(packageName, 0)
+                        }
+                        val version = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            packageInfo.longVersionCode
+                        } else {
+                            @Suppress("DEPRECATION")
+                            packageInfo.versionCode.toLong()
+                        }
+                        
+                        Wearable.getMessageClient(this@WearDataListenerService)
+                            .sendMessage(messageEvent.sourceNodeId, "/version_info", version.toString().toByteArray())
+                            .await()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to send version info", e)
+                    }
                 }
             }
         }

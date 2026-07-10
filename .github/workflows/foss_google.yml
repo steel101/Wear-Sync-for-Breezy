@@ -31,28 +31,8 @@ jobs:
       - name: Make Gradle Executable
         run: chmod +x ./gradlew
 
-      - name: Build All Release Variants
-        run: ./gradlew :app:assembleFossRelease :app:assembleGooglePlayRelease :wear:assembleFossRelease :wear:assembleGooglePlayRelease
-
-      - name: Sign Phone FOSS APK
-        id: sign_phone_foss
-        uses: r0adkll/sign-android-release@v1
-        with:
-          releaseDirectory: app/build/outputs/apk/foss/release
-          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-
-      - name: Sign Phone Google Play APK
-        id: sign_phone_google
-        uses: r0adkll/sign-android-release@v1
-        with:
-          releaseDirectory: app/build/outputs/apk/googlePlay/release
-          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Build and Sign Watch APKs First
+        run: ./gradlew :wear:assembleFossRelease :wear:assembleGooglePlayRelease
 
       - name: Sign Watch FOSS APK
         id: sign_watch_foss
@@ -74,6 +54,36 @@ jobs:
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
+      - name: Prepare Assets for Phone Build
+        run: |
+          mkdir -p app/src/googlePlay/assets
+          cp ${{ steps.sign_watch_google.outputs.signedReleaseFile }} app/src/googlePlay/assets/wear_companion.apk
+          mkdir -p app/src/foss/assets
+          cp ${{ steps.sign_watch_foss.outputs.signedReleaseFile }} app/src/foss/assets/wear_companion.apk
+
+      - name: Build Phone APKs
+        run: ./gradlew :app:assembleFossRelease :app:assembleGooglePlayRelease
+
+      - name: Sign Phone FOSS APK
+        id: sign_phone_foss
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/foss/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Sign Phone Google Play APK
+        id: sign_phone_google
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/googlePlay/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
       - name: Create GitHub Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
         with:
@@ -81,7 +91,6 @@ jobs:
           tag_name: testing-build-${{ github.run_number }}-all
           target_commitish: testing
           draft: false
-          # Keeps your release marked as a pre-release so it doesn't mess with main branch builds
           prerelease: true
           files: |
             ${{ steps.sign_phone_foss.outputs.signedReleaseFile }}

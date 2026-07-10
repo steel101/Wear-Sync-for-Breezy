@@ -10,29 +10,23 @@ import android.util.Log
 import kotlinx.coroutines.delay
 import org.breezyweather.datasharing.BreezyLocation
 import org.json.JSONObject
+import java.io.File
+import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
 
 object FossBluetoothSyncManager : WeatherSyncManager {
     private const val TAG = "FossBluetoothSync"
     private val SYNC_UUID: UUID = UUID.fromString("f2a74c7e-0b0b-4b2a-8c2e-4b2a4c2e8c2e")
+    private val FILE_TRANSFER_UUID: UUID = UUID.fromString("e4a5d6c7-b8a9-4d3c-2b1a-0f9e8d7c6b5a")
 
     @SuppressLint("MissingPermission")
     override suspend fun syncWeather(context: Context, locations: List<BreezyLocation>) {
         if (locations.isEmpty()) return
 
-        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        val adapter = bluetoothManager.adapter
-        if (adapter == null || !adapter.isEnabled) {
-            Log.w(TAG, "Bluetooth is disabled or not available")
-            throw Exception("Bluetooth unavailable")
-        }
-
+        val adapter = getAdapter(context) ?: throw Exception("Bluetooth unavailable")
         val pairedDevices = adapter.bondedDevices
-        if (pairedDevices.isEmpty()) {
-            Log.w(TAG, "No paired Bluetooth devices found")
-            throw Exception("No paired devices")
-        }
+        if (pairedDevices.isEmpty()) throw Exception("No paired devices")
 
         val data = JSONObject()
         data.put("location_count", locations.size)
@@ -56,9 +50,7 @@ object FossBluetoothSyncManager : WeatherSyncManager {
             }
         }
 
-        if (!success) {
-            throw Exception("Failed to sync to any paired device via Bluetooth")
-        }
+        if (!success) throw Exception("Failed to sync to any paired device via Bluetooth")
         
         context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
             .edit()
@@ -66,35 +58,93 @@ object FossBluetoothSyncManager : WeatherSyncManager {
             .apply()
     }
 
+    private fun getAdapter(context: Context): BluetoothAdapter? {
+        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        return bluetoothManager.adapter
+    }
+
     @SuppressLint("MissingPermission")
     private suspend fun trySyncToDevice(device: BluetoothDevice, payload: String): Boolean {
         var socket: BluetoothSocket? = null
         return try {
-            Log.d(TAG, "Attempting FOSS BT sync to ${device.name} (${device.address})")
             socket = device.createInsecureRfcommSocketToServiceRecord(SYNC_UUID)
             socket.connect()
-            val outputStream: OutputStream = socket.outputStream
-            outputStream.write(payload.toByteArray(Charsets.UTF_8))
-            outputStream.flush()
-            delay(1000)
-            Log.d(TAG, "FOSS BT sync successful to ${device.name}")
+            socket.outputStream.write(payload.toByteArray(Charsets.UTF_8))
+            socket.outputStream.flush()
+            delay(500)
             true
         } catch (e: Exception) {
-            Log.d(TAG, "FOSS BT sync insecure failed for ${device.name}, trying secure: ${e.message}")
             try {
                 socket?.close()
                 socket = device.createRfcommSocketToServiceRecord(SYNC_UUID)
                 socket.connect()
-                val outputStream: OutputStream = socket.outputStream
-                outputStream.write(payload.toByteArray(Charsets.UTF_8))
-                outputStream.flush()
-                delay(1000)
-                Log.d(TAG, "FOSS BT sync secure successful to ${device.name}")
+                socket.outputStream.write(payload.toByteArray(Charsets.UTF_8))
+                socket.outputStream.flush()
+                delay(500)
                 true
             } catch (e2: Exception) {
-                Log.e(TAG, "FOSS BT sync all failed for ${device.name}: ${e2.message}")
                 false
             }
+        } finally {
+            try { socket?.close() } catch (_: Exception) {}
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    suspend fun sendApkToWatch(context: Context, apkFile: File): Boolean {
+        val adapter = getAdapter(context) ?: return false
+        val devices = adapter.bondedDevices
+        if (devices.isEmpty()) return false
+
+        var success = false
+        for (device in devices) {
+            if (trySendFile(device, apkFile)) {
+                success = true
+                break
+            }
+        }
+        return success
+    }
+
+    @SuppressLint("MissingPermission")
+    private suspend fun trySendFile(device: BluetoothDevice, file: File): Boolean {
+        var socket: BluetoothSocket? = null
+        return try {
+            Log.d(TAG, "Starting BT APK transfer to ${device.name}")
+            socket = device.createInsecureRfcommSocketToServiceRecord(FILE_TRANSFER_UUID)
+            socket.connect()
+            
+            val out = socket.outputStream
+            val fileIn = file.inputStream()
+            
+            // 1. Send Header: NAME|SIZE\n
+            val header = "${file.name}|${file.length()}\n"
+            out.write(header.toByteArray(Charsets.UTF_8))
+            out.flush()
+            
+            // 2. Send Data
+            val buffer = ByteArray(8192)
+            var bytesRead: Int
+            var totalSent = 0L
+            val fileSize = file.length()
+            
+            while (fileIn.read(buffer).also { bytesRead = it } != -1) {
+                out.write(buffer, 0, bytesRead)
+                totalSent += bytesRead
+                // Progress logging every 10%
+                if (totalSent % (fileSize / 10).coerceAtLeast(1) < 8192) {
+                    Log.d(TAG, "Sent: ${totalSent * 100 / fileSize}%")
+                }
+            }
+            out.flush()
+            fileIn.close()
+            
+            delay(1000) // Give watch time to finish writing
+            Log.d(TAG, "BT APK transfer complete")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "BT APK transfer failed for ${device.name}: ${e.message}")
+            false
         } finally {
             try { socket?.close() } catch (_: Exception) {}
         }

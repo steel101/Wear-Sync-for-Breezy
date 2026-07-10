@@ -55,7 +55,7 @@ fun WearApp(initialTarget: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE) }
 
-    val bluetoothPermissionLauncher = rememberLauncherForActivityResult(
+    val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.all { it.value }) {
@@ -68,11 +68,22 @@ fun WearApp(initialTarget: String? = null) {
     }
 
     LaunchedEffect(Unit) {
+        val permissions = mutableListOf<String>()
+        
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            val hasConnect = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (!hasConnect) {
-                bluetoothPermissionLauncher.launch(arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT))
-            }
+            permissions.add(android.Manifest.permission.BLUETOOTH_CONNECT)
+        }
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        val neededPermissions = permissions.filter {
+            androidx.core.content.ContextCompat.checkSelfPermission(context, it) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+
+        if (neededPermissions.isNotEmpty()) {
+            permissionLauncher.launch(neededPermissions.toTypedArray())
         }
     }
 

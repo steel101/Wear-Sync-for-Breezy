@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.steel101.wearsyncforbreezy.sync.WeatherSyncWorker
 import com.steel101.wearsyncforbreezy.ui.FlavorSettings
+import com.steel101.wearsyncforbreezy.ui.SetupInstructions
 import com.steel101.wearsyncforbreezy.ui.startSyncService
 import com.steel101.wearsyncforbreezy.ui.theme.BreezyWeatherWearOsSyncTheme
 import org.breezyweather.datasharing.BreezyLocation
@@ -107,14 +108,17 @@ fun WeatherSyncScreen(
     val watchStatus by viewModel.watchStatus.collectAsState()
 
     val prefs = remember { context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE) }
-    var showInstructions by remember { mutableStateOf(prefs.getBoolean("first_launch_setup", true)) }
+    var firstLaunch by remember { mutableStateOf(prefs.getBoolean("first_launch_setup", true)) }
 
-    if (showInstructions) {
-        SetupInstructionsDialog(onDismiss = {
-            showInstructions = false
-            prefs.edit().putBoolean("first_launch_setup", false).apply()
-        })
-    }
+    SetupInstructions(
+        showLoading = firstLaunch,
+        onDismiss = {
+            if (firstLaunch) {
+                firstLaunch = false
+                prefs.edit().putBoolean("first_launch_setup", false).apply()
+            }
+        }
+    )
 
     LaunchedEffect(Unit) {
         viewModel.loadCachedTime(context)
@@ -227,49 +231,6 @@ fun WeatherSyncScreen(
         }
         Spacer(modifier = Modifier.height(32.dp))
     }
-}
-
-@Composable
-fun SetupInstructionsDialog(onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Watch App Setup") },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text("To sync weather, you must sideload the companion app on your watch:")
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                Text("1. Download the Wear APK", fontWeight = FontWeight.Bold)
-                Button(
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/steel101/Wear-Sync-for-Breezy/releases"))
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.padding(vertical = 4.dp)
-                ) {
-                    Text("Open GitHub Releases")
-                }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("2. Enable Developer Mode", fontWeight = FontWeight.Bold)
-                Text("On your Watch: Settings > System > About > Tap 'Build number' 7 times.")
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("3. Enable ADB & Wi-Fi Debugging", fontWeight = FontWeight.Bold)
-                Text("On your Watch: Settings > Developer options > Enable 'ADB debugging' and 'Debug over Wi-Fi'. Note the IP address.")
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("4. Sideload the APK", fontWeight = FontWeight.Bold)
-                Text("On your Phone: Install 'Bugjaeger' from Play Store. Use it to connect to your watch's IP and install the APK you downloaded.")
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Got it")
-            }
-        }
-    )
 }
 
 @Composable

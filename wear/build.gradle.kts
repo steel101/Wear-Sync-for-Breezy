@@ -1,6 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -16,16 +25,26 @@ android {
         applicationId = "com.steel101.wearsyncforbreezy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.37"
+        versionCode = 8
+        versionName = "1.0.44"
         resConfigs("en")
         vectorDrawables {
             useSupportLibrary = true
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(project.findProperty("RELEASE_STORE_FILE") ?: localProperties.getProperty("RELEASE_STORE_FILE") ?: "C:/Users/steel/github")
+            storePassword = project.findProperty("RELEASE_STORE_PASSWORD")?.toString() ?: localProperties.getProperty("RELEASE_STORE_PASSWORD") ?: "android"
+            keyAlias = project.findProperty("RELEASE_KEY_ALIAS")?.toString() ?: localProperties.getProperty("RELEASE_KEY_ALIAS") ?: "androiddebugkey"
+            keyPassword = project.findProperty("RELEASE_KEY_PASSWORD")?.toString() ?: localProperties.getProperty("RELEASE_KEY_PASSWORD") ?: "android"
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

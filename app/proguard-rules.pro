@@ -74,3 +74,10 @@
 # Ensure these aren't stripped if used via reflection
 -keep class com.hivemq.client.internal.mqtt.codec.decoder.** { *; }
 -keep class com.hivemq.client.internal.mqtt.codec.encoder.** { *; }
+
+# Breezy Weather Data Sharing
+-keep class org.breezyweather.datasharing.** { *; }
+
+# Wearable API
+-keep class com.google.android.gms.wearable.** { *; }
+-keep class * extends com.google.android.gms.wearable.WearableListenerService { *; }
