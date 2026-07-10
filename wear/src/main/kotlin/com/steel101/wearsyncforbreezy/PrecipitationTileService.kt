@@ -42,7 +42,6 @@ class PrecipitationTileService : TileService() {
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
             .setWidth(DimensionBuilders.expand())
 
-        // Top Weather Icon
         rootColumn.addContent(
             LayoutElementBuilders.Box.Builder()
                 .setWidth(DimensionBuilders.dp(32f))
@@ -94,7 +93,6 @@ class PrecipitationTileService : TileService() {
         rootColumn.addContent(pillChip("🌧️", "Rain Chance", rainChance))
         rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(4f)).build())
 
-        // Visibility & Dew Point Bottom Chip
         rootColumn.addContent(
             LayoutElementBuilders.Box.Builder()
                 .setWidth(DimensionBuilders.expand())

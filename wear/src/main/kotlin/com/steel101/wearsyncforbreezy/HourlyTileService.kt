@@ -74,7 +74,6 @@ class HourlyTileService : TileService() {
                                 .build()
                         )
 
-                        // Vertical Grid Line
                         if (col < 2 && i < hCount - 1) {
                             rowLayout.addContent(
                                 LayoutElementBuilders.Box.Builder()
@@ -92,7 +91,6 @@ class HourlyTileService : TileService() {
                 if (addedInRow > 0) {
                     grid.addContent(rowLayout.build())
 
-                    // Horizontal Row Line
                     if (row == 0 && hCount > 3) {
                         grid.addContent(
                             LayoutElementBuilders.Box.Builder()

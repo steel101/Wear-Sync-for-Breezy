@@ -1,7 +1,8 @@
 package com.steel101.wearsyncforbreezy
 
-import android.content.Intent
+import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -25,18 +26,39 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.steel101.wearsyncforbreezy.sync.WeatherSyncWorker
+import com.steel101.wearsyncforbreezy.ui.FlavorSettings
+import com.steel101.wearsyncforbreezy.ui.startSyncService
 import com.steel101.wearsyncforbreezy.ui.theme.BreezyWeatherWearOsSyncTheme
 import org.breezyweather.datasharing.BreezyLocation
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     private val viewModel: WeatherSyncViewModel by viewModels()
+
+    private val bluetoothPermissions = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        arrayOf(
+            android.Manifest.permission.BLUETOOTH_CONNECT,
+            android.Manifest.permission.BLUETOOTH_SCAN
+        )
+    } else {
+        arrayOf(
+            android.Manifest.permission.BLUETOOTH,
+            android.Manifest.permission.BLUETOOTH_ADMIN
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         
+        try {
+            startSyncService(this)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to start FOSS sync service", e)
+        }
         schedulePeriodicSync()
 
         setContent {
@@ -57,7 +79,7 @@ class MainActivity : ComponentActivity() {
             .build()
 
         val syncRequest = PeriodicWorkRequestBuilder<WeatherSyncWorker>(
-            30, java.util.concurrent.TimeUnit.MINUTES
+            30L, TimeUnit.MINUTES
         )
             .setConstraints(constraints)
             .build()
@@ -96,6 +118,19 @@ fun WeatherSyncScreen(
         }
     }
 
+    val bluetoothPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.all { it.value }) {
+            try {
+                startSyncService(context)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to start sync service after permission grant", e)
+            }
+            viewModel.fetchAndSync(context)
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -112,6 +147,8 @@ fun WeatherSyncScreen(
             WeatherInfoCard(data)
             Spacer(modifier = Modifier.height(16.dp))
             Text(text = watchStatus, fontSize = 14.sp, color = if (watchStatus.contains("Connected")) Color(0xFF4CAF50) else Color.Gray)
+            Spacer(modifier = Modifier.height(16.dp))
+            FlavorSettings(viewModel)
             Spacer(modifier = Modifier.height(32.dp))
         }
 
@@ -123,6 +160,19 @@ fun WeatherSyncScreen(
                     }
                     return@Button
                 }
+                
+                val mode = context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
+                    .getString("sync_mode", "AUTO")
+                if ((mode == "BLUETOOTH" || mode == "AUTO") && !viewModel.hasBluetoothPermission(context)) {
+                    val perms = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_SCAN)
+                    } else {
+                        arrayOf(android.Manifest.permission.BLUETOOTH, android.Manifest.permission.BLUETOOTH_ADMIN)
+                    }
+                    bluetoothPermissionLauncher.launch(perms)
+                    return@Button
+                }
+
                 viewModel.fetchAndSync(context)
             },
             enabled = uiState !is SyncUiState.Loading

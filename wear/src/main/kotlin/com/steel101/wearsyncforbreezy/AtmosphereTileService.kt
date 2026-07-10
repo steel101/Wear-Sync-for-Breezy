@@ -97,7 +97,6 @@ class AtmosphereTileService : TileService() {
                 .build())
             .build()
 
-        // AIR & UV Chip
         val uvVal = uv.toFloatOrNull() ?: 0f
         val uvColor = WeatherUtils.getUvColor(uv)
 
@@ -125,7 +124,6 @@ class AtmosphereTileService : TileService() {
 
         rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(3f)).build())
 
-        // ATMOSPHERE Chip
         rootColumn.addContent(chip("Atmosphere", LayoutElementBuilders.Row.Builder()
             .addContent(LayoutElementBuilders.Text.Builder().setText("Pressure").setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(DimensionBuilders.sp(12f)).build()).build())
             .addContent(LayoutElementBuilders.Spacer.Builder().setWidth(DimensionBuilders.dp(8f)).build())
@@ -134,7 +132,6 @@ class AtmosphereTileService : TileService() {
 
         rootColumn.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(3f)).build())
 
-        // AQI & CLOUDS Chip
         rootColumn.addContent(chip("Aqi & Clouds", LayoutElementBuilders.Column.Builder()
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_START)
             .addContent(LayoutElementBuilders.Row.Builder()

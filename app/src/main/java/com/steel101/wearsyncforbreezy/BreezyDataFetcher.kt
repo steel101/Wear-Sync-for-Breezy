@@ -14,11 +14,9 @@ object BreezyDataFetcher {
     suspend fun fetchAllWeatherData(context: Context): List<BreezyLocation> = withContext(Dispatchers.IO) {
         val locations = mutableListOf<BreezyLocation>()
         
-        // Try current position first
         val current = fetchFromUri(context, AUTHORITY, "id=CURRENT_POSITION")
         if (current != null) locations.add(current)
 
-        // Then all other saved locations
         try {
             val uri = Uri.parse("content://$AUTHORITY/locations")
             val cursor = context.contentResolver.query(uri, null, null, null, null)

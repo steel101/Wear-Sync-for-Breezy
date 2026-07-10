@@ -20,5 +20,4 @@ android {
 dependencies {
     api(libs.breezy.datasharing)
     implementation(libs.kotlinx.serialization.json)
-    implementation("org.json:json:20250107")
 }

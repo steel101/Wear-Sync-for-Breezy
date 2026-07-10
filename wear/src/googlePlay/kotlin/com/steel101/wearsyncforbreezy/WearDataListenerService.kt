@@ -59,22 +59,18 @@ class WearDataListenerService : WearableListenerService() {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
         val editor = prefs.edit()
         
-        // Save metadata
         val locationCount = dataMap.getInt("location_count", 1)
         editor.putInt("location_count", locationCount)
         editor.putLong("timestamp", dataMap.getLong("timestamp"))
 
-        // Save primary location (no prefix) for backward compat / complications
         saveLocationData(editor, dataMap, "")
 
-        // Save all locations with prefixes
         for (i in 0 until locationCount) {
             saveLocationData(editor, dataMap, "loc_${i}_")
         }
 
         editor.commit()
 
-        // 1. Update Tiles
         try {
             val updater = androidx.wear.tiles.TileService.getUpdater(this)
             val tiles = listOf(
@@ -89,7 +85,6 @@ class WearDataListenerService : WearableListenerService() {
             Log.e(TAG, "Tile update failed", e)
         }
 
-        // 2. Update Complications
         try {
             val complications = listOf(
                 WeatherComplicationService::class.java, FeelsLikeComplicationService::class.java,
@@ -141,7 +136,7 @@ class WearDataListenerService : WearableListenerService() {
         editor.putString("${prefix}pollen_grass", dataMap.getString("${prefix}pollen_grass") ?: "--")
         editor.putString("${prefix}pollen_weed", dataMap.getString("${prefix}pollen_weed") ?: "--")
 
-        editor.putFloat("${prefix}wind_dir", dataMap.getFloat("${prefix}wind_dir"))
+        editor.putFloat("${prefix}wind_dir", dataMap.getDouble("${prefix}wind_dir").toFloat())
         
         val alertCount = dataMap.getInt("${prefix}alert_count")
         editor.putInt("${prefix}alert_count", alertCount)
@@ -160,7 +155,7 @@ class WearDataListenerService : WearableListenerService() {
             editor.putInt("${prefix}alert_severity_$i", severity)
             editor.putString("${prefix}alert_color_$i", color)
             
-            if (severity >= 3 && prefix == "") { // Only show notifications for primary location
+            if (severity >= 3 && prefix == "") {
                 showNotification(title, desc, severity)
             }
         }
@@ -194,23 +189,19 @@ class WearDataListenerService : WearableListenerService() {
 
     private fun showNotification(title: String, text: String, severity: Int) {
         val name = "Weather Alerts"
-        val descriptionText = "Important weather warnings"
         val importance = NotificationManager.IMPORTANCE_HIGH
         
-        // Custom vibrations: Severe (4) gets triple pulse, High (3) gets double pulse
         val vibePattern = when (severity) {
-            in 4..5 -> longArrayOf(0, 500, 200, 500, 200, 500) // Triple pulse
-            3 -> longArrayOf(0, 500, 200, 500) // Double pulse
-            else -> longArrayOf(0, 500) // Single pulse
+            in 4..5 -> longArrayOf(0, 500, 200, 500, 200, 500)
+            3 -> longArrayOf(0, 500, 200, 500)
+            else -> longArrayOf(0, 500)
         }
 
         val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
-            description = descriptionText
             enableVibration(true)
             vibrationPattern = vibePattern
         }
-        val notificationManager: NotificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager: NotificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -219,18 +210,12 @@ class WearDataListenerService : WearableListenerService() {
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
 
         with(NotificationManagerCompat.from(this)) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                androidx.core.content.ContextCompat.checkSelfPermission(
-                    this@WearDataListenerService,
-                    android.Manifest.permission.POST_NOTIFICATIONS
-                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                androidx.core.content.ContextCompat.checkSelfPermission(this@WearDataListenerService, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
             ) {
                 notify(title.hashCode(), builder.build())
-            } else {
-                Log.w(TAG, "Notification permission not granted, skipping alert: $title")
             }
         }
     }

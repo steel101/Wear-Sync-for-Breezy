@@ -17,7 +17,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0.36"
+        versionName = "1.0.37"
         resConfigs("en")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -33,12 +33,32 @@ android {
             )
         }
     }
+
+    flavorDimensions += "store"
+    productFlavors {
+        create("googlePlay") {
+            dimension = "store"
+        }
+        create("foss") {
+            dimension = "store"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
         compose = true
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/INDEX.LIST"
+            excludes += "/META-INF/io.netty.versions.properties"
+            excludes += "/META-INF/native-image/**"
+            excludes += "/META-INF/okio.kotlin_module"
+        }
     }
 }
 
@@ -52,8 +72,13 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.play.services.wearable)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+    implementation(libs.androidx.startup)
+
+    "googlePlayImplementation"(libs.play.services.wearable)
+    "googlePlayImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+
+    "fossImplementation"(libs.hivemq.mqtt.client)
+
     implementation(project(":shared"))
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.ListenableWorker.Result
 import com.steel101.wearsyncforbreezy.BreezyDataFetcher
+import com.steel101.wearsyncforbreezy.sync.SyncProvider
 
 class WeatherSyncWorker(
     appContext: Context,
@@ -27,8 +28,8 @@ class WeatherSyncWorker(
 
         return try {
             val data = BreezyDataFetcher.fetchAllWeatherData(applicationContext)
-            if (data != null) {
-                WearSyncHelper.syncWeather(applicationContext, data)
+            if (data.isNotEmpty()) {
+                SyncProvider.getManager().syncWeather(applicationContext, data)
                 Log.d(TAG, "Background sync successful")
                 Result.success()
             } else {

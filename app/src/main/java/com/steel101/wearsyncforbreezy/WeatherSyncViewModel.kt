@@ -1,7 +1,6 @@
 package com.steel101.wearsyncforbreezy
 
 import android.content.Context
-
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.content.edit
@@ -9,9 +8,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.*
-import com.steel101.wearsyncforbreezy.sync.WearSyncHelper
+import com.steel101.wearsyncforbreezy.sync.SyncProvider
 import com.steel101.wearsyncforbreezy.sync.WeatherSyncWorker
-import kotlinx.coroutines.tasks.await
+import com.steel101.wearsyncforbreezy.ui.getWatchStatus
 import org.breezyweather.datasharing.BreezyLocation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,17 +53,7 @@ class WeatherSyncViewModel : ViewModel() {
 
     fun updateWatchStatus(context: Context) {
         viewModelScope.launch {
-            try {
-                val nodes = com.google.android.gms.wearable.Wearable.getNodeClient(context).connectedNodes.await()
-                if (nodes.isEmpty()) {
-                    _watchStatus.value = "Watch Disconnected"
-                } else {
-                    val nodeNames = nodes.joinToString { it.displayName }
-                    _watchStatus.value = "Watch Connected: $nodeNames"
-                }
-            } catch (e: Exception) {
-                _watchStatus.value = "Status Unknown"
-            }
+            _watchStatus.value = getWatchStatus(context)
         }
     }
 
@@ -117,6 +106,15 @@ class WeatherSyncViewModel : ViewModel() {
         return ContextCompat.checkSelfPermission(context, BREEZY_PERMISSION) == PackageManager.PERMISSION_GRANTED
     }
 
+    fun hasBluetoothPermission(context: Context): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
     fun isBreezyInstalled(context: Context): Boolean {
         return try {
             context.packageManager.getPackageInfo(BREEZY_PACKAGE, 0)
@@ -139,7 +137,7 @@ class WeatherSyncViewModel : ViewModel() {
                     _weatherData.value = locations[0]
 
                     withContext(Dispatchers.IO) {
-                        WearSyncHelper.syncWeather(context, locations)
+                        SyncProvider.getManager().syncWeather(context, locations)
                         val now = System.currentTimeMillis()
                         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit {
                             putLong(KEY_LAST_SYNC, now)
