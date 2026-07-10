@@ -1,12 +1,14 @@
 name: Build FOSS & Google Play APKs
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # This ensures it ONLY runs when manually clicked
 
 jobs:
   build:
     name: Build & Sign APKs
     runs-on: ubuntu-latest
+    # This completely blocks the job if the manual run wasn't triggered from 'testing'
+    if: github.ref_name == 'testing'
     permissions:
       contents: write
 
@@ -75,10 +77,12 @@ jobs:
       - name: Create GitHub Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
         with:
-          name: FOSS & Google Play Release v1.0.${{ github.run_number }}
-          tag_name: build-${{ github.run_number }}-all
+          name: FOSS & Google Play Testing Release v1.0.${{ github.run_number }}
+          tag_name: testing-build-${{ github.run_number }}-all
+          target_commitish: testing
           draft: false
-          prerelease: false
+          # Keeps your release marked as a pre-release so it doesn't mess with main branch builds
+          prerelease: true
           files: |
             ${{ steps.sign_phone_foss.outputs.signedReleaseFile }}
             ${{ steps.sign_phone_google.outputs.signedReleaseFile }}
