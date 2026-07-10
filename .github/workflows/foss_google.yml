@@ -1,9 +1,8 @@
 name: Build FOSS & Google Play APKs
 
 on:
-  push:
-    branches:
-      - testing
+  branches:
+    - testing
 
 jobs:
   build:
