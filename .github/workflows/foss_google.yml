@@ -1,13 +1,15 @@
 name: Build FOSS & Google Play APKs
 
 on:
-  workflow_dispatch: # This ensures it ONLY runs when manually clicked
+  push:
+    branches:
+      - testing
+  workflow_dispatch: 
 
 jobs:
   build:
     name: Build & Sign APKs
     runs-on: ubuntu-latest
-    # This completely blocks the job if the manual run wasn't triggered from 'testing'
     if: github.ref_name == 'testing' 
     permissions:
       contents: write
@@ -54,13 +56,38 @@ jobs:
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
+      - name: Sign Watch FOSS APK
+        id: sign_watch_foss
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: wear/build/outputs/apk/foss/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Sign Watch Google Play APK
+        id: sign_watch_google
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: wear/build/outputs/apk/googlePlay/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      # This uploads all 4 APKs into a single release tagged as a Pre-release
       - name: Upload Artifacts to Testing Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             ${{ steps.sign_phone_foss.outputs.signedReleaseFile }}
             ${{ steps.sign_phone_google.outputs.signedReleaseFile }}
+            ${{ steps.sign_watch_foss.outputs.signedReleaseFile }}
+            ${{ steps.sign_watch_google.outputs.signedReleaseFile }}
           target_commitish: testing
           tag_name: testing-build-${{ github.run_number }}
+          # This flag converts the entire deployment into a pre-release format
+          prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
