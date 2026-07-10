@@ -1,7 +1,9 @@
 name: Build FOSS & Google Play APKs
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - testing
 
 jobs:
   build:
