@@ -1,0 +1,66 @@
+name: Build FOSS & Google Play APKs
+
+on:
+  workflow_dispatch: # This ensures it ONLY runs when manually clicked
+
+jobs:
+  build:
+    name: Build & Sign APKs
+    runs-on: ubuntu-latest
+    # This completely blocks the job if the manual run wasn't triggered from 'testing'
+    if: github.ref_name == 'testing' 
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Install Android Build Tools
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;35.0.0" "platforms;android-35"
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;29.0.3"
+
+      - name: Make Gradle Executable
+        run: chmod +x ./gradlew
+
+      - name: Build All Release Variants
+        run: ./gradlew :app:assembleFossRelease :app:assembleGooglePlayRelease :wear:assembleFossRelease :wear:assembleGooglePlayRelease
+
+      - name: Sign Phone FOSS APK
+        id: sign_phone_foss
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/foss/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Sign Phone Google Play APK
+        id: sign_phone_google
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/googlePlay/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload Artifacts to Testing Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.sign_phone_foss.outputs.signedReleaseFile }}
+            ${{ steps.sign_phone_google.outputs.signedReleaseFile }}
+          target_commitish: testing
+          tag_name: testing-build-${{ github.run_number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
