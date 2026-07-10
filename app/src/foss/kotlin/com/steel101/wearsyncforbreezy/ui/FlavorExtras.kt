@@ -38,7 +38,6 @@ fun FlavorSettings(viewModel: WeatherSyncViewModel) {
                         onClick = {
                             syncMode = mode.name
                             prefs.edit().putString("sync_mode", mode.name).apply()
-                            // Restart services to apply mode change
                             startSyncService(context)
                         }
                     )
@@ -89,7 +88,6 @@ fun startSyncService(context: Context) {
         context.stopService(btIntent)
         ContextCompat.startForegroundService(context, mqttIntent)
     } else {
-        // Auto: Start both
         ContextCompat.startForegroundService(context, mqttIntent)
         ContextCompat.startForegroundService(context, btIntent)
     }

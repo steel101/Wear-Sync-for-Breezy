@@ -1,14 +1,12 @@
 name: Build FOSS & Google Play APKs
 
 on:
-  workflow_dispatch: # This ensures it ONLY runs when manually clicked
+  workflow_dispatch:
 
 jobs:
   build:
     name: Build & Sign APKs
     runs-on: ubuntu-latest
-    # This completely blocks the job if the manual run wasn't triggered from 'testing'
-    if: github.ref_name == 'testing' 
     permissions:
       contents: write
 
@@ -54,13 +52,37 @@ jobs:
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      - name: Upload Artifacts to Testing Release
+      - name: Sign Watch FOSS APK
+        id: sign_watch_foss
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: wear/build/outputs/apk/foss/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Sign Watch Google Play APK
+        id: sign_watch_google
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: wear/build/outputs/apk/googlePlay/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Create GitHub Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
         with:
+          name: FOSS & Google Play Release v1.0.${{ github.run_number }}
+          tag_name: build-${{ github.run_number }}-all
+          draft: false
+          prerelease: false
           files: |
             ${{ steps.sign_phone_foss.outputs.signedReleaseFile }}
             ${{ steps.sign_phone_google.outputs.signedReleaseFile }}
-          target_commitish: testing
-          tag_name: testing-build-${{ github.run_number }}
+            ${{ steps.sign_watch_foss.outputs.signedReleaseFile }}
+            ${{ steps.sign_watch_google.outputs.signedReleaseFile }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
