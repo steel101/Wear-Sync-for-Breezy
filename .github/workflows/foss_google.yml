@@ -1,13 +1,14 @@
 name: Build FOSS & Google Play APKs
 
 on:
-  branches:
-    - testing
+  workflow_dispatch: # This adds the "Run workflow" button on GitHub
 
 jobs:
   build:
     name: Build & Sign APKs
     runs-on: ubuntu-latest
+    # This prevents the job from running unless you selected the testing branch
+    if: github.ref_name == 'testing' 
     permissions:
       contents: write
 
