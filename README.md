@@ -44,13 +44,20 @@ is a lightweight bridge application that seamlessly syncs detailed weather data 
 
 ## 🚀 Installation & Setup
 
+### 📦 Build Flavors
+This app is available in two versions (flavors) to suit different device environments:
+
+*   **Google Play (`googlePlay`)**: Uses Google Play Services (Wearable API) for high-reliability data syncing. This is the recommended version for most users with standard Wear OS watches.
+*   **FOSS (`foss`)**: A fully Open Source version that does **not** require Google Play Services. It uses a custom Bluetooth RFCOMM implementation for syncing and MQTT for decentralized communication. Ideal for de-googled phones or advanced users.
+
+### ⚙️ Setup Steps
 1. **Breezy Weather**
    Ensure you have the main app installed and configured on your phone.
    👉 [Get Breezy Weather on GitHub](https://github.com/breezy-weather/breezy-weather)
 2. **Permissions**
    Open this sync app and tap **"Fetch & Sync"**. Grant the requested permission to read data from Breezy Weather.
 3. **Watch App**
-   Ensure the companion app component is installed on your Wear OS watch to receive and display the incoming data stream.
+   Ensure the companion app component is installed on your Wear OS watch to receive and display the incoming data stream. **Note:** Both phone and watch must use the same build flavor (either both Google Play or both FOSS).
 4. **Battery Optimization**
    For reliable background syncing, **disable "Battery Optimization"** for this app in your Android system settings so OS restrictions do not kill the background sync service.
 
@@ -59,7 +66,9 @@ is a lightweight bridge application that seamlessly syncs detailed weather data 
 ## 🛠️ How It Works
 
 * **The Phone App:** Displays a clean preview of the data being synced along with a **"Last Synced"** timestamp so you know your watch is up to date.
-* **The Background Service:** Runs a `START_STICKY` background service that listens for system changes and handles communication via the **Google Play Services Wearable API**.
+* **The Background Service:** 
+    * **Google Play Version:** Handles communication via the **Google Play Services Wearable API**.
+    * **FOSS Version:** Runs a background Bluetooth listener and uses standard RFCOMM sockets to bridge data to the watch.
 
 ---
 
@@ -67,4 +76,4 @@ is a lightweight bridge application that seamlessly syncs detailed weather data 
 
 * 📱 Android Phone with **Breezy Weather** installed
 * ⌚ **Wear OS Watch** actively connected via Bluetooth/Wi-Fi
-* 🛠️ **Google Play Services** on both devices
+* 🛠️ **Google Play Services** (Only required for the `googlePlay` flavor)
