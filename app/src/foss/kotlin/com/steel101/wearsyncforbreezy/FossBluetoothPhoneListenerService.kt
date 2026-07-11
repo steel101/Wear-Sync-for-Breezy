@@ -18,6 +18,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.steel101.wearsyncforbreezy.sync.SyncProvider
 import com.steel101.wearsyncforbreezy.sync.SyncMode
+import com.steel101.wearsyncforbreezy.sync.FossBluetoothSyncManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -135,14 +136,19 @@ class FossBluetoothPhoneListenerService : Service() {
         scope.launch {
             try {
                 Log.d(TAG, "Received FOSS BT refresh request")
+                val device = socket.remoteDevice
+                // Close the request socket immediately to free up the BT stack for the response sync
+                try { socket.close() } catch (_: Exception) {}
+                
+                // Wait a moment for the watch to switch back to listening mode
+                delay(1000)
+
                 val locations = BreezyDataFetcher.fetchAllWeatherData(this@FossBluetoothPhoneListenerService)
                 if (locations.isNotEmpty()) {
-                    SyncProvider.getManager().syncWeather(this@FossBluetoothPhoneListenerService, locations)
+                    FossBluetoothSyncManager.syncWeatherToDevice(this@FossBluetoothPhoneListenerService, device, locations)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error handling BT request: ${e.message}")
-            } finally {
-                try { socket.close() } catch (_: Exception) {}
             }
         }
     }

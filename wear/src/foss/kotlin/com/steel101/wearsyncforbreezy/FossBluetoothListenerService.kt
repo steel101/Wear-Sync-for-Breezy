@@ -53,13 +53,23 @@ class FossBluetoothListenerService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java)
+            
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "FOSS Bluetooth Sync",
                 NotificationManager.IMPORTANCE_LOW
             )
-            val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
+
+            val installChannel = NotificationChannel(
+                "apk_install",
+                "App Updates",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifications for app updates received via Bluetooth"
+            }
+            manager.createNotificationChannel(installChannel)
         }
     }
 
@@ -105,6 +115,7 @@ class FossBluetoothListenerService : Service() {
                     delay(5000)
                 } finally {
                     try { syncServerSocket?.close() } catch (_: Exception) {}
+                    syncServerSocket = null
                 }
             }
         }
@@ -128,6 +139,7 @@ class FossBluetoothListenerService : Service() {
                     delay(5000)
                 } finally {
                     try { fileServerSocket?.close() } catch (_: Exception) {}
+                    fileServerSocket = null
                 }
             }
         }
@@ -141,7 +153,15 @@ class FossBluetoothListenerService : Service() {
                 val out = StringBuilder()
                 var bytesRead: Int
                 while (true) {
-                    bytesRead = inputStream.read(buffer)
+                    try {
+                        bytesRead = inputStream.read(buffer)
+                    } catch (e: java.io.IOException) {
+                        if (e.message?.contains("bt socket closed") == true) {
+                            bytesRead = -1
+                        } else {
+                            throw e
+                        }
+                    }
                     if (bytesRead == -1) break
                     out.append(String(buffer, 0, bytesRead, Charsets.UTF_8))
                     if (out.contains("\n")) break
@@ -151,36 +171,65 @@ class FossBluetoothListenerService : Service() {
                     SyncDataProcessor.processJson(this@FossBluetoothListenerService, JSONObject(data))
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Sync error: ${e.message}")
+                if (e is java.io.IOException && e.message?.contains("bt socket closed") == true) {
+                    Log.d(TAG, "Sync socket closed by peer")
+                } else {
+                    Log.e(TAG, "Sync error: ${e.message}")
+                }
             } finally {
                 try { socket.close() } catch (_: Exception) {}
             }
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun handleFileSocket(socket: BluetoothSocket) {
         scope.launch {
             try {
-                Log.d(TAG, "Incoming BT file transfer...")
-                val input = socket.inputStream
+                Log.d(TAG, "Incoming BT file transfer from ${socket.remoteDevice.name}")
+                val input = socket.inputStream.buffered()
                 
                 // 1. Read Header (NAME|SIZE\n)
                 val headerBuilder = StringBuilder()
                 var char: Int
-                while (input.read().also { char = it } != -1) {
-                    if (char.toChar() == '\n') break
+                var headerFound = false
+                while (true) {
+                    try {
+                        char = input.read()
+                    } catch (e: java.io.IOException) {
+                        if (e.message?.contains("bt socket closed") == true) {
+                            char = -1
+                        } else {
+                            throw e
+                        }
+                    }
+                    if (char == -1) break
+                    if (char.toChar() == '\n') {
+                        headerFound = true
+                        break
+                    }
                     headerBuilder.append(char.toChar())
+                    if (headerBuilder.length > 256) break // Safety limit
                 }
                 
+                if (!headerFound) {
+                    Log.e(TAG, "Failed to read file header or connection lost")
+                    return@launch
+                }
+
                 val header = headerBuilder.toString()
                 val parts = header.split("|")
-                if (parts.size < 2) return@launch
+                if (parts.size < 2) {
+                    Log.e(TAG, "Invalid file header: $header")
+                    return@launch
+                }
                 
                 val fileName = parts[0]
                 val fileSize = parts[1].toLong()
                 Log.d(TAG, "Receiving file: $fileName ($fileSize bytes)")
                 
                 // 2. Receive Data
+                // Use filesDir/apks which is internal but accessible via FileProvider if configured
                 val apkDir = File(filesDir, "apks")
                 if (!apkDir.exists()) apkDir.mkdirs()
                 val apkFile = File(apkDir, "received_bt_wear.apk")
@@ -192,20 +241,57 @@ class FossBluetoothListenerService : Service() {
                 var totalRead = 0L
                 
                 while (totalRead < fileSize) {
-                    bytesRead = input.read(buffer, 0, minOf(buffer.size.toLong(), fileSize - totalRead).toInt())
-                    if (bytesRead == -1) break
+                    val remaining = fileSize - totalRead
+                    try {
+                        bytesRead = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                    } catch (e: java.io.IOException) {
+                        if (e.message?.contains("bt socket closed") == true) {
+                            bytesRead = -1
+                        } else {
+                            throw e
+                        }
+                    }
+                    if (bytesRead == -1) {
+                        Log.e(TAG, "Socket closed during transfer. Got $totalRead of $fileSize bytes")
+                        break
+                    }
                     output.write(buffer, 0, bytesRead)
                     totalRead += bytesRead
+                    
+                    val progressStep = (fileSize / 10).coerceAtLeast(1)
+                    if (totalRead % progressStep < 8192 || totalRead == fileSize) {
+                        Log.d(TAG, "Received: ${totalRead * 100 / fileSize}% ($totalRead / $fileSize)")
+                    }
                 }
                 output.flush()
                 output.close()
                 
+                // Stabilization delay for the filesystem
+                delay(1000)
+
                 if (totalRead == fileSize) {
-                    Log.d(TAG, "File received successfully, showing notification")
+                    Log.d(TAG, "File received successfully: ${apkFile.absolutePath}")
+                    
+                    // Send ACK to phone
+                    try {
+                        socket.outputStream.write(0x4B) // 'K' for OK
+                        socket.outputStream.flush()
+                        delay(500) // Brief delay to ensure ACK is sent
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to send ACK to phone: ${e.message}")
+                    }
+
                     showInstallNotification(apkFile)
+                } else {
+                    Log.e(TAG, "File transfer incomplete. Deleted partial file.")
+                    apkFile.delete()
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "File transfer error: ${e.message}")
+                if (e is java.io.IOException && e.message?.contains("bt socket closed") == true) {
+                    Log.w(TAG, "Connection lost during file transfer: ${e.message}")
+                } else {
+                    Log.e(TAG, "File transfer error: ${e.message}", e)
+                }
             } finally {
                 try { socket.close() } catch (_: Exception) {}
             }
@@ -213,33 +299,37 @@ class FossBluetoothListenerService : Service() {
     }
 
     private fun showInstallNotification(file: File) {
+        Log.d(TAG, "Showing install notification for ${file.absolutePath}")
         val channelId = "apk_install"
         val notificationId = 1001
         val notificationManager = getSystemService(NotificationManager::class.java)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "App Updates", NotificationManager.IMPORTANCE_HIGH)
-            notificationManager?.createNotificationChannel(channel)
-        }
-
         val contentUri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+        
         val installIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(contentUri, "application/vnd.android.package-archive")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or 
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
         }
 
-        val pendingIntent = PendingIntent.getActivity(this, 0, installIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, installIntent, 
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle("Update Ready")
             .setContentText("Tap to install the latest FOSS version.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            .setVibrate(longArrayOf(0, 500, 200, 500))
 
         notificationManager?.notify(notificationId, builder.build())
+        Log.d(TAG, "Notification posted")
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

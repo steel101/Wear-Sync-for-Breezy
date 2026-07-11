@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.WearableListenerService
+import com.steel101.wearsyncforbreezy.wear.R
 import java.io.File
 
 class WearApkInstallService : WearableListenerService() {

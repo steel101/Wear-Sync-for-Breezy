@@ -11,8 +11,19 @@ import java.util.UUID
 
 class FossRefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        val watchId = Settings.Secure.getString(applicationContext.contentResolver, Settings.Secure.ANDROID_ID)
-        Log.d("FossRefreshWorker", "Triggering periodic refresh for $watchId")
+        val prefs = applicationContext.getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
+        val modeStr = prefs.getString("sync_mode", SyncMode.AUTO.name) ?: SyncMode.AUTO.name
+        val mode = try { SyncMode.valueOf(modeStr) } catch (e: Exception) { SyncMode.AUTO }
+
+        val androidId = Settings.Secure.getString(applicationContext.contentResolver, Settings.Secure.ANDROID_ID)
+        val watchId = SyncUtils.getHashedWatchId(androidId)
+        Log.d("FossRefreshWorker", "Triggering periodic refresh for $watchId (mode: $mode)")
+
+        if (mode == SyncMode.BLUETOOTH) {
+            // No action needed for BT here as Phone listener handles the push
+            // but we can try to "ping" the phone if we want to wake it up
+            return Result.success()
+        }
         
         return try {
             val client = Mqtt5Client.builder()

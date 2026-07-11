@@ -12,7 +12,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
-        android:name=".BreezyWearSyncApplication"
+        android:name="com.steel101.wearsyncforbreezy.BreezyWearSyncApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -172,7 +172,7 @@
         </service>
 
         <service
-            android:name=".WeatherComplicationService"
+            android:name="com.steel101.wearsyncforbreezy.WeatherComplicationService"
             android:exported="true"
             android:label="Weather"
             android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
@@ -188,7 +188,7 @@
         </service>
 
         <service
-            android:name=".FeelsLikeComplicationService"
+            android:name="com.steel101.wearsyncforbreezy.FeelsLikeComplicationService"
             android:exported="true"
             android:label="Feels Like"
             android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
@@ -204,7 +204,7 @@
         </service>
 
         <service
-            android:name=".WindComplicationService"
+            android:name="com.steel101.wearsyncforbreezy.WindComplicationService"
             android:exported="true"
             android:label="Wind"
             android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
@@ -220,7 +220,7 @@
         </service>
 
         <service
-            android:name=".RainChanceComplicationService"
+            android:name="com.steel101.wearsyncforbreezy.RainChanceComplicationService"
             android:exported="true"
             android:label="Rain Chance"
             android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
@@ -236,7 +236,7 @@
         </service>
 
         <service
-            android:name=".AqiComplicationService"
+            android:name="com.steel101.wearsyncforbreezy.AqiComplicationService"
             android:exported="true"
             android:label="AQI"
             android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
@@ -252,7 +252,7 @@
         </service>
 
         <service
-            android:name=".UvComplicationService"
+            android:name="com.steel101.wearsyncforbreezy.UvComplicationService"
             android:exported="true"
             android:label="UV Index"
             android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
@@ -268,7 +268,7 @@
         </service>
 
         <service
-            android:name=".WearApkInstallService"
+            android:name="com.steel101.wearsyncforbreezy.WearApkInstallService"
             android:exported="true">
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
@@ -284,16 +284,6 @@
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
-        </provider>
-
-        <provider
-            android:name="androidx.startup.InitializationProvider"
-            android:authorities="${applicationId}.androidx-startup"
-            android:exported="false"
-            tools:node="merge">
-            <meta-data
-                android:name="androidx.work.WorkManagerInitializer"
-                android:value="androidx.startup" />
         </provider>
 
     </application>

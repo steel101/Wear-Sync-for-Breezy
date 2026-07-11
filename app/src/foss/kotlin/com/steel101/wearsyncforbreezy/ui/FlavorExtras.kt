@@ -133,25 +133,45 @@ fun FlavorSettings(viewModel: WeatherSyncViewModel) {
         Button(
             onClick = {
                 scope.launch {
+                    Log.d("FlavorExtras", "Push Update button clicked")
                     installStatus = "Preparing APK..."
                     try {
                         val apkFile = withContext(Dispatchers.IO) {
+                            Log.d("FlavorExtras", "Opening asset wear_companion.apk")
                             val file = File(context.cacheDir, "wear_foss_companion.apk")
                             context.assets.open("wear_companion.apk").use { input ->
+                                val size = input.available()
+                                Log.d("FlavorExtras", "Asset size: $size")
+                                if (size < 100000) { // APKs should be larger than 100KB
+                                    throw Exception("APK in assets is too small or missing ($size bytes)")
+                                }
                                 FileOutputStream(file).use { output ->
                                     input.copyTo(output)
                                 }
                             }
+                            Log.d("FlavorExtras", "APK prepared at ${file.absolutePath}")
                             file
                         }
+                        
+                        installStatus = "Checking Bluetooth..."
+                        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager
+                        if (bluetoothManager.adapter?.isEnabled != true) {
+                            installStatus = "Error: Bluetooth is off"
+                            return@launch
+                        }
+
                         installStatus = "Sending via Bluetooth..."
-                        val success = FossBluetoothSyncManager.sendApkToWatch(context, apkFile)
+                        Log.d("FlavorExtras", "Calling sendApkToWatch")
+                        val success = FossBluetoothSyncManager.sendApkToWatch(context, apkFile) { progress ->
+                            installStatus = "Sending: $progress%"
+                        }
                         if (success) {
                             installStatus = "Update sent! Check watch."
                         } else {
-                            installStatus = "Failed. Ensure Watch app is open."
+                            installStatus = "Failed. Ensure Watch app is open and paired."
                         }
                     } catch (e: Exception) {
+                        Log.e("FlavorExtras", "Update failed", e)
                         installStatus = "Error: ${e.message}"
                     }
                 }

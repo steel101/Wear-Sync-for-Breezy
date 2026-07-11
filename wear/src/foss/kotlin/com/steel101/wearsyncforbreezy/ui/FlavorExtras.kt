@@ -28,7 +28,9 @@ import com.steel101.wearsyncforbreezy.sync.SyncMode
 import com.steel101.wearsyncforbreezy.sync.SyncUtils
 import com.hivemq.client.mqtt.mqtt5.Mqtt5Client
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.util.Log
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -146,11 +148,11 @@ fun onRefreshRequest(context: Context, scope: CoroutineScope) {
 private val REQUEST_UUID: UUID = UUID.fromString("d3b8e5c1-2a1f-4b3e-8c4d-5e6f7a8b9c0d")
 
 @SuppressLint("MissingPermission")
-private suspend fun sendFossBluetoothRefresh(context: Context): Boolean {
-    return try {
+private suspend fun sendFossBluetoothRefresh(context: Context): Boolean = withContext(Dispatchers.IO) {
+    return@withContext try {
         val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         val adapter = bluetoothManager.adapter
-        if (adapter == null || !adapter.isEnabled) return false
+        if (adapter == null || !adapter.isEnabled) return@withContext false
         
         val pairedDevices = adapter.bondedDevices
         var success = false
