@@ -35,16 +35,26 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file(project.findProperty("RELEASE_STORE_FILE") ?: localProperties.getProperty("RELEASE_STORE_FILE") ?: "C:/Users/steel/github")
-            storePassword = project.findProperty("RELEASE_STORE_PASSWORD")?.toString() ?: localProperties.getProperty("RELEASE_STORE_PASSWORD") ?: "android"
-            keyAlias = project.findProperty("RELEASE_KEY_ALIAS")?.toString() ?: localProperties.getProperty("RELEASE_KEY_ALIAS") ?: "androiddebugkey"
-            keyPassword = project.findProperty("RELEASE_KEY_PASSWORD")?.toString() ?: localProperties.getProperty("RELEASE_KEY_PASSWORD") ?: "android"
+            val storePath = project.findProperty("RELEASE_STORE_FILE")?.toString() 
+                ?: localProperties.getProperty("RELEASE_STORE_FILE") 
+                ?: "C:/Users/steel/github"
+            
+            val storeFilePath = file(storePath)
+            if (storeFilePath.exists()) {
+                storeFile = storeFilePath
+                storePassword = project.findProperty("RELEASE_STORE_PASSWORD")?.toString() ?: localProperties.getProperty("RELEASE_STORE_PASSWORD") ?: "android"
+                keyAlias = project.findProperty("RELEASE_KEY_ALIAS")?.toString() ?: localProperties.getProperty("RELEASE_KEY_ALIAS") ?: "androiddebugkey"
+                keyPassword = project.findProperty("RELEASE_KEY_PASSWORD")?.toString() ?: localProperties.getProperty("RELEASE_KEY_PASSWORD") ?: "android"
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            val releaseSigningConfig = signingConfigs.getByName("release")
+            if (releaseSigningConfig.storeFile?.exists() == true) {
+                signingConfig = releaseSigningConfig
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
