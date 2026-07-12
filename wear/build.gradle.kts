@@ -35,16 +35,28 @@ android {
 
     signingConfigs {
         create("release") {
-            val storePath = project.findProperty("RELEASE_STORE_FILE")?.toString() 
-                ?: localProperties.getProperty("RELEASE_STORE_FILE") 
-                ?: "C:/Users/steel/github"
-            
-            val storeFilePath = file(storePath)
-            if (storeFilePath.exists()) {
-                storeFile = storeFilePath
-                storePassword = project.findProperty("RELEASE_STORE_PASSWORD")?.toString() ?: localProperties.getProperty("RELEASE_STORE_PASSWORD") ?: "android"
-                keyAlias = project.findProperty("RELEASE_KEY_ALIAS")?.toString() ?: localProperties.getProperty("RELEASE_KEY_ALIAS") ?: "androiddebugkey"
-                keyPassword = project.findProperty("RELEASE_KEY_PASSWORD")?.toString() ?: localProperties.getProperty("RELEASE_KEY_PASSWORD") ?: "android"
+            val isCi = System.getenv("GITHUB_ACTIONS") == "true"
+            val storePath = project.findProperty("ANDROID_KEYSTORE_FILE")?.toString()
+                ?: System.getenv("ANDROID_KEYSTORE_FILE")
+                ?: localProperties.getProperty("ANDROID_KEYSTORE_FILE")
+                ?: if (isCi) "" else "C:/Users/steel/github"
+
+            if (storePath.isNotEmpty()) {
+                val storeFilePath = file(storePath)
+                if (storeFilePath.exists()) {
+                    storeFile = storeFilePath
+                    storePassword = project.findProperty("ANDROID_KEYSTORE_PASSWORD")?.toString()
+                        ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                        ?: localProperties.getProperty("ANDROID_KEYSTORE_PASSWORD")
+                    
+                    keyAlias = project.findProperty("ANDROID_KEY_ALIAS")?.toString()
+                        ?: System.getenv("ANDROID_KEY_ALIAS")
+                        ?: localProperties.getProperty("ANDROID_KEY_ALIAS")
+
+                    keyPassword = project.findProperty("ANDROID_KEY_PASSWORD")?.toString()
+                        ?: System.getenv("ANDROID_KEY_PASSWORD")
+                        ?: localProperties.getProperty("ANDROID_KEY_PASSWORD")
+                }
             }
         }
     }
@@ -55,6 +67,7 @@ android {
             if (releaseSigningConfig.storeFile?.exists() == true) {
                 signingConfig = releaseSigningConfig
             }
+
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

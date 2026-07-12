@@ -12,6 +12,24 @@ val localProperties = Properties().apply {
     }
 }
 
+val copyGooglePlayWearApk = tasks.register<Copy>("copyGooglePlayWearApk") {
+    val wearProject = project(":wear")
+    dependsOn("${wearProject.path}:assembleGooglePlayRelease")
+    from(wearProject.layout.buildDirectory.dir("outputs/apk/googlePlay/release"))
+    include { it.name.endsWith(".apk") && !it.name.contains("-unsigned") }
+    into(layout.projectDirectory.dir("src/googlePlay/assets"))
+    rename { "wear_companion.apk" }
+}
+
+val copyFossWearApk = tasks.register<Copy>("copyFossWearApk") {
+    val wearProject = project(":wear")
+    dependsOn("${wearProject.path}:assembleFossRelease")
+    from(wearProject.layout.buildDirectory.dir("outputs/apk/foss/release"))
+    include { it.name.endsWith(".apk") && !it.name.contains("-unsigned") }
+    into(layout.projectDirectory.dir("src/foss/assets"))
+    rename { "wear_companion.apk" }
+}
+
 android {
     namespace = "com.steel101.wearsyncforbreezy"
     compileSdk = 37
@@ -34,16 +52,28 @@ android {
 
     signingConfigs {
         create("release") {
-            val storePath = project.findProperty("RELEASE_STORE_FILE")?.toString() 
-                ?: localProperties.getProperty("RELEASE_STORE_FILE") 
-                ?: "C:/Users/steel/github"
-            
-            val storeFilePath = file(storePath)
-            if (storeFilePath.exists()) {
-                storeFile = storeFilePath
-                storePassword = project.findProperty("RELEASE_STORE_PASSWORD")?.toString() ?: localProperties.getProperty("RELEASE_STORE_PASSWORD") ?: "android"
-                keyAlias = project.findProperty("RELEASE_KEY_ALIAS")?.toString() ?: localProperties.getProperty("RELEASE_KEY_ALIAS") ?: "androiddebugkey"
-                keyPassword = project.findProperty("RELEASE_KEY_PASSWORD")?.toString() ?: localProperties.getProperty("RELEASE_KEY_PASSWORD") ?: "android"
+            val isCi = System.getenv("GITHUB_ACTIONS") == "true"
+            val storePath = project.findProperty("ANDROID_KEYSTORE_FILE")?.toString()
+                ?: System.getenv("ANDROID_KEYSTORE_FILE")
+                ?: localProperties.getProperty("ANDROID_KEYSTORE_FILE")
+                ?: if (isCi) "" else "C:/Users/steel/github"
+
+            if (storePath.isNotEmpty()) {
+                val storeFilePath = file(storePath)
+                if (storeFilePath.exists()) {
+                    storeFile = storeFilePath
+                    storePassword = project.findProperty("ANDROID_KEYSTORE_PASSWORD")?.toString()
+                        ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                        ?: localProperties.getProperty("ANDROID_KEYSTORE_PASSWORD")
+                    
+                    keyAlias = project.findProperty("ANDROID_KEY_ALIAS")?.toString()
+                        ?: System.getenv("ANDROID_KEY_ALIAS")
+                        ?: localProperties.getProperty("ANDROID_KEY_ALIAS")
+
+                    keyPassword = project.findProperty("ANDROID_KEY_PASSWORD")?.toString()
+                        ?: System.getenv("ANDROID_KEY_PASSWORD")
+                        ?: localProperties.getProperty("ANDROID_KEY_PASSWORD")
+                }
             }
         }
     }
@@ -82,31 +112,12 @@ android {
         buildConfig = true
     }
 
-    val copyGooglePlayWearApk = tasks.register<Copy>("copyGooglePlayWearApk") {
-        val wearProject = project(":wear")
-        dependsOn("${wearProject.path}:assembleGooglePlayRelease")
-        from(wearProject.layout.buildDirectory.dir("outputs/apk/googlePlay/release"))
-        include { it.name.endsWith(".apk") && !it.name.contains("-unsigned") }
-        into(layout.projectDirectory.dir("src/googlePlay/assets"))
-        rename { "wear_companion.apk" }
-    }
-
-    val copyFossWearApk = tasks.register<Copy>("copyFossWearApk") {
-        val wearProject = project(":wear")
-        dependsOn("${wearProject.path}:assembleFossRelease")
-        from(wearProject.layout.buildDirectory.dir("outputs/apk/foss/release"))
-        include { it.name.endsWith(".apk") && !it.name.contains("-unsigned") }
-        into(layout.projectDirectory.dir("src/foss/assets"))
-        rename { "wear_companion.apk" }
-    }
-
     project.afterEvaluate {
         tasks.named("mergeGooglePlayReleaseAssets") { dependsOn(copyGooglePlayWearApk) }
         tasks.named("mergeGooglePlayDebugAssets") { dependsOn(copyGooglePlayWearApk) }
         tasks.named("mergeFossReleaseAssets") { dependsOn(copyFossWearApk) }
         tasks.named("mergeFossDebugAssets") { dependsOn(copyFossWearApk) }
         
-        // Also hook into lint to avoid the configuration error
         tasks.matching { it.name.contains("lint", ignoreCase = true) }.configureEach {
             if (name.contains("GooglePlay", ignoreCase = true)) {
                 dependsOn(copyGooglePlayWearApk)

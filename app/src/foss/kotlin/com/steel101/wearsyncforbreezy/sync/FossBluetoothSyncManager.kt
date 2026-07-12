@@ -103,7 +103,12 @@ object FossBluetoothSyncManager : WeatherSyncManager {
                 socket = connectWithRetry(device, SYNC_UUID)
                 socket.outputStream.write(payload.toByteArray(Charsets.UTF_8))
                 socket.outputStream.flush()
-                delay(1000) // Increased delay to ensure watch receives all data
+                
+                // Reduced delay and added quick ACK check for faster completion
+                try {
+                    socket.inputStream.read() 
+                } catch (_: Exception) {}
+                
                 true
             } catch (e: Exception) {
                 Log.e(TAG, "Sync failed for ${device.name}: ${e.message}")
@@ -151,13 +156,16 @@ object FossBluetoothSyncManager : WeatherSyncManager {
 
                 fileIn = file.inputStream()
                 
-                // 1. Send Header: NAME|SIZE\n
+                // 1. Send Header: NAME|SIZE\n (Trimmed and clean)
                 val header = "${file.name}|${file.length()}\n"
                 out.write(header.toByteArray(Charsets.UTF_8))
                 out.flush()
                 
+                // Small delay to allow watch to process header before binary data hits
+                delay(500)
+
                 // 2. Send Data
-                val buffer = ByteArray(8192)
+                val buffer = ByteArray(16384) // Larger buffer
                 var bytesRead: Int
                 var totalSent = 0L
                 val fileSize = file.length()
@@ -167,9 +175,9 @@ object FossBluetoothSyncManager : WeatherSyncManager {
                 while (fileIn.read(buffer).also { bytesRead = it } != -1) {
                     out.write(buffer, 0, bytesRead)
                     totalSent += bytesRead
-                    // Progress logging and callback every ~1%
+                    // Progress logging and callback
                     val progressStep = (fileSize / 100).coerceAtLeast(1)
-                    if (totalSent % progressStep < 8192 || totalSent == fileSize) {
+                    if (totalSent % progressStep < buffer.size || totalSent == fileSize) {
                         val percent = (totalSent * 100 / fileSize).toInt()
                         Log.d(TAG, "Sent: $percent% ($totalSent / $fileSize)")
                         withContext(Dispatchers.Main) {
@@ -180,17 +188,13 @@ object FossBluetoothSyncManager : WeatherSyncManager {
                 out.flush()
                 
                 Log.d(TAG, "All data sent, waiting for watch ACK...")
-                // Wait for watch to acknowledge receipt to prevent early closure
+                // Wait for watch to acknowledge receipt
                 try {
                     val ack = socket.inputStream.read()
                     Log.d(TAG, "Received watch ACK: $ack")
                 } catch (e: Exception) {
-                    if (e is java.io.IOException && e.message?.contains("bt socket closed") == true) {
-                        Log.d(TAG, "Socket closed by watch after transfer (expected)")
-                    } else {
-                        Log.w(TAG, "Did not receive ACK from watch, closing anyway: ${e.message}")
-                    }
-                    delay(2000) // Extra safety wait
+                    Log.w(TAG, "Did not receive ACK from watch, closing anyway: ${e.message}")
+                    delay(1000)
                 }
 
                 Log.d(TAG, "BT APK transfer complete")
@@ -211,14 +215,13 @@ object FossBluetoothSyncManager : WeatherSyncManager {
         
         val adapter = BluetoothAdapter.getDefaultAdapter()
         
-        // Try multiple attempts with different strategies
+        // Strategy 1: Insecure RFCOMM (standard) - Faster retry
         for (attempt in 1..2) {
-            // Strategy 1: Insecure RFCOMM (standard)
             try {
                 Log.d(TAG, "Connect attempt $attempt (insecure) to ${device.name}")
                 if (adapter?.isDiscovering == true) {
                     adapter.cancelDiscovery()
-                    delay(800)
+                    delay(200) // Reduced delay
                 }
                 val socket = device.createInsecureRfcommSocketToServiceRecord(uuid)
                 socket.connect()
@@ -226,20 +229,19 @@ object FossBluetoothSyncManager : WeatherSyncManager {
             } catch (e: Exception) {
                 lastException = e
                 Log.w(TAG, "Insecure attempt $attempt failed: ${e.message}")
-                delay(1000)
+                delay(300) // Reduced delay
             }
+        }
 
-            // Strategy 2: Secure RFCOMM fallback
-            try {
-                Log.d(TAG, "Connect attempt $attempt (secure) to ${device.name}")
-                val socket = device.createRfcommSocketToServiceRecord(uuid)
-                socket.connect()
-                return socket
-            } catch (e: Exception) {
-                lastException = e
-                Log.w(TAG, "Secure attempt $attempt failed: ${e.message}")
-                delay(1000)
-            }
+        // Strategy 2: Secure RFCOMM fallback
+        try {
+            Log.d(TAG, "Connect (secure) to ${device.name}")
+            val socket = device.createRfcommSocketToServiceRecord(uuid)
+            socket.connect()
+            return socket
+        } catch (e: Exception) {
+            lastException = e
+            Log.w(TAG, "Secure attempt failed: ${e.message}")
         }
 
         // Strategy 3: Reflection fallback (last resort)

@@ -120,12 +120,6 @@ fun WeatherSyncScreen(
         }
     )
 
-    LaunchedEffect(Unit) {
-        viewModel.loadCachedTime(context)
-        viewModel.checkAndFetchInitialData(context)
-        viewModel.updateWatchStatus(context)
-    }
-
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -144,6 +138,24 @@ fun WeatherSyncScreen(
                 Log.e("MainActivity", "Failed to start sync service after permission grant", e)
             }
             viewModel.fetchAndSync(context)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadCachedTime(context)
+        viewModel.checkAndFetchInitialData(context)
+        viewModel.updateWatchStatus(context)
+
+        // Request Bluetooth permissions on launch if not granted (FOSS/Auto mode)
+        val mode = context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
+            .getString("sync_mode", "AUTO")
+        if ((mode == "BLUETOOTH" || mode == "AUTO") && !viewModel.hasBluetoothPermission(context)) {
+            val perms = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_SCAN)
+            } else {
+                arrayOf(android.Manifest.permission.BLUETOOTH, android.Manifest.permission.BLUETOOTH_ADMIN)
+            }
+            bluetoothPermissionLauncher.launch(perms)
         }
     }
 

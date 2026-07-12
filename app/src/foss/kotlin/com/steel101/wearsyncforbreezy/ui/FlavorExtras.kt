@@ -32,7 +32,7 @@ import java.io.FileOutputStream
 
 @Composable
 fun SetupInstructions(showLoading: Boolean = true, onDismiss: () -> Unit) {
-    var visible by remember { mutableStateOf(true) }
+    var visible by remember { mutableStateOf(showLoading) }
     if (visible) {
         SetupInstructionsDialog(onDismiss = {
             visible = false
@@ -53,14 +53,25 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit) {
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 Text("1. Download the Wear APK", fontWeight = FontWeight.Bold)
-                Button(
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/steel101/Wear-Sync-for-Breezy/releases"))
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.padding(vertical = 4.dp)
-                ) {
-                    Text("Open GitHub Releases")
+                Row(modifier = Modifier.padding(vertical = 4.dp)) {
+                    Button(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/steel101/Wear-Sync-for-Breezy/releases"))
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("GitHub")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            saveApkToDownloads(context)
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Save to Phone")
+                    }
                 }
                 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -92,6 +103,11 @@ fun FlavorSettings(viewModel: WeatherSyncViewModel) {
     var watchId by remember { mutableStateOf(prefs.getString("watch_id", "") ?: "") }
     var syncMode by remember { mutableStateOf(prefs.getString("sync_mode", SyncMode.AUTO.name) ?: SyncMode.AUTO.name) }
     var installStatus by remember { mutableStateOf("") }
+    
+    val watchVersionCode by viewModel.watchVersionCode.collectAsState()
+    val currentVersionCode = com.steel101.wearsyncforbreezy.shared.BuildConfig.VERSION_CODE
+    val isUpToDate = watchVersionCode >= currentVersionCode
+    var showConfirmDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.padding(16.dp)) {
         Text("FOSS Sync Settings", fontWeight = FontWeight.Bold)
@@ -132,57 +148,54 @@ fun FlavorSettings(viewModel: WeatherSyncViewModel) {
         Text("Device Actions", fontWeight = FontWeight.Bold)
         Button(
             onClick = {
-                scope.launch {
-                    Log.d("FlavorExtras", "Push Update button clicked")
-                    installStatus = "Preparing APK..."
-                    try {
-                        val apkFile = withContext(Dispatchers.IO) {
-                            Log.d("FlavorExtras", "Opening asset wear_companion.apk")
-                            val file = File(context.cacheDir, "wear_foss_companion.apk")
-                            context.assets.open("wear_companion.apk").use { input ->
-                                val size = input.available()
-                                Log.d("FlavorExtras", "Asset size: $size")
-                                if (size < 100000) { // APKs should be larger than 100KB
-                                    throw Exception("APK in assets is too small or missing ($size bytes)")
-                                }
-                                FileOutputStream(file).use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
-                            Log.d("FlavorExtras", "APK prepared at ${file.absolutePath}")
-                            file
-                        }
-                        
-                        installStatus = "Checking Bluetooth..."
-                        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager
-                        if (bluetoothManager.adapter?.isEnabled != true) {
-                            installStatus = "Error: Bluetooth is off"
-                            return@launch
-                        }
-
-                        installStatus = "Sending via Bluetooth..."
-                        Log.d("FlavorExtras", "Calling sendApkToWatch")
-                        val success = FossBluetoothSyncManager.sendApkToWatch(context, apkFile) { progress ->
-                            installStatus = "Sending: $progress%"
-                        }
-                        if (success) {
-                            installStatus = "Update sent! Check watch."
-                        } else {
-                            installStatus = "Failed. Ensure Watch app is open and paired."
-                        }
-                    } catch (e: Exception) {
-                        Log.e("FlavorExtras", "Update failed", e)
-                        installStatus = "Error: ${e.message}"
-                    }
+                if (isUpToDate) {
+                    showConfirmDialog = true
+                } else {
+                    performPushUpdate(context, scope, { installStatus = it }, { installStatus = it })
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = installStatus.isEmpty() || !installStatus.contains("...")
+            enabled = (installStatus.isEmpty() || !installStatus.contains("..."))
         ) {
-            Text("Push Update to Watch (BT)")
+            Text(if (isUpToDate) "Watch App is Up to Date" else "Push Update to Watch (BT)")
         }
+
+        if (showConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showConfirmDialog = false },
+                title = { Text("App Up to Date") },
+                text = { Text("The watch app version matches the phone. Do you want to push the update anyway?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showConfirmDialog = false
+                        performPushUpdate(context, scope, { installStatus = it }, { installStatus = it })
+                    }) {
+                        Text("Push Anyway")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showConfirmDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
         if (installStatus.isNotEmpty()) {
             Text(installStatus, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        var showInstructions by remember { mutableStateOf(false) }
+        TextButton(
+            onClick = { showInstructions = true },
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        ) {
+            Text("Show Sideload Instructions")
+        }
+
+        if (showInstructions) {
+            SetupInstructionsDialog(onDismiss = { showInstructions = false })
         }
     }
 }
@@ -215,5 +228,103 @@ fun startSyncService(context: Context) {
     } else {
         ContextCompat.startForegroundService(context, mqttIntent)
         ContextCompat.startForegroundService(context, btIntent)
+    }
+}
+
+private fun performPushUpdate(
+    context: Context,
+    scope: kotlinx.coroutines.CoroutineScope,
+    onStatusChange: (String) -> Unit,
+    onProgress: (String) -> Unit
+) {
+    scope.launch {
+        Log.d("FlavorExtras", "Push Update started")
+        onStatusChange("Preparing APK...")
+        try {
+            val apkFile = withContext(Dispatchers.IO) {
+                Log.d("FlavorExtras", "Opening asset wear_companion.apk")
+                val file = File(context.cacheDir, "wear_foss_companion.apk")
+                context.assets.open("wear_companion.apk").use { input ->
+                    val size = input.available()
+                    Log.d("FlavorExtras", "Asset size: $size")
+                    if (size < 100000) { // APKs should be larger than 100KB
+                        throw Exception("APK in assets is too small or missing ($size bytes)")
+                    }
+                    FileOutputStream(file).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Log.d("FlavorExtras", "APK prepared at ${file.absolutePath}")
+                file
+            }
+            
+            onStatusChange("Checking Bluetooth...")
+            val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager
+            if (bluetoothManager.adapter?.isEnabled != true) {
+                onStatusChange("Error: Bluetooth is off")
+                return@launch
+            }
+
+            onStatusChange("Sending via Bluetooth...")
+            Log.d("FlavorExtras", "Calling sendApkToWatch")
+            val success = FossBluetoothSyncManager.sendApkToWatch(context, apkFile) { progress ->
+                onProgress("Sending: $progress%")
+            }
+            if (success) {
+                onStatusChange("Update sent! Check watch.")
+            } else {
+                onStatusChange("Failed. Ensure Watch app is open and paired.")
+            }
+        } catch (e: Exception) {
+            Log.e("FlavorExtras", "Update failed", e)
+            onStatusChange("Error: ${e.message}")
+        }
+    }
+}
+
+private fun saveApkToDownloads(context: Context) {
+    val fileName = "${com.steel101.wearsyncforbreezy.shared.BuildConfig.VERSION_CODE}.watch.apk"
+    try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val contentValues = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/vnd.android.package-archive")
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+            }
+            
+            val resolver = context.contentResolver
+            val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            
+            if (uri != null) {
+                context.assets.open("wear_companion.apk").use { input ->
+                    resolver.openOutputStream(uri).use { output ->
+                        if (output != null) {
+                            input.copyTo(output)
+                        }
+                    }
+                }
+                android.widget.Toast.makeText(context, "Saved to Downloads: $fileName", android.widget.Toast.LENGTH_LONG).show()
+            }
+        } else {
+            // Check permission for older versions
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) 
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                android.widget.Toast.makeText(context, "Please grant storage permission in settings to save the APK", android.widget.Toast.LENGTH_LONG).show()
+                return
+            }
+            
+            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+            val targetFile = File(downloadsDir, fileName)
+
+            context.assets.open("wear_companion.apk").use { input ->
+                FileOutputStream(targetFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            android.widget.Toast.makeText(context, "Saved to Downloads: $fileName", android.widget.Toast.LENGTH_LONG).show()
+        }
+    } catch (e: Exception) {
+        Log.e("FlavorExtras", "Failed to save APK", e)
+        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
     }
 }

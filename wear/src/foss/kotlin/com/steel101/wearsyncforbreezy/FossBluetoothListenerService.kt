@@ -166,6 +166,13 @@ class FossBluetoothListenerService : Service() {
                     out.append(String(buffer, 0, bytesRead, Charsets.UTF_8))
                     if (out.contains("\n")) break
                 }
+                
+                // Send immediate ACK to phone so it can close the connection faster
+                try {
+                    socket.outputStream.write(0x06) // ACK
+                    socket.outputStream.flush()
+                } catch (_: Exception) {}
+
                 val data = out.toString().trim()
                 if (data.isNotEmpty()) {
                     SyncDataProcessor.processJson(this@FossBluetoothListenerService, JSONObject(data))
@@ -187,29 +194,21 @@ class FossBluetoothListenerService : Service() {
         scope.launch {
             try {
                 Log.d(TAG, "Incoming BT file transfer from ${socket.remoteDevice.name}")
-                val input = socket.inputStream.buffered()
+                val input = socket.inputStream
                 
-                // 1. Read Header (NAME|SIZE\n)
+                // 1. Read Header (NAME|SIZE\n) using raw input to avoid over-reading
                 val headerBuilder = StringBuilder()
                 var char: Int
                 var headerFound = false
                 while (true) {
-                    try {
-                        char = input.read()
-                    } catch (e: java.io.IOException) {
-                        if (e.message?.contains("bt socket closed") == true) {
-                            char = -1
-                        } else {
-                            throw e
-                        }
-                    }
+                    char = input.read()
                     if (char == -1) break
                     if (char.toChar() == '\n') {
                         headerFound = true
                         break
                     }
                     headerBuilder.append(char.toChar())
-                    if (headerBuilder.length > 256) break // Safety limit
+                    if (headerBuilder.length > 512) break // Safety limit
                 }
                 
                 if (!headerFound) {
@@ -217,7 +216,7 @@ class FossBluetoothListenerService : Service() {
                     return@launch
                 }
 
-                val header = headerBuilder.toString()
+                val header = headerBuilder.toString().trim()
                 val parts = header.split("|")
                 if (parts.size < 2) {
                     Log.e(TAG, "Invalid file header: $header")
@@ -225,73 +224,72 @@ class FossBluetoothListenerService : Service() {
                 }
                 
                 val fileName = parts[0]
-                val fileSize = parts[1].toLong()
+                val fileSize = try { parts[1].trim().toLong() } catch (e: Exception) { -1L }
+                
+                if (fileSize <= 0) {
+                    Log.e(TAG, "Invalid file size in header: ${parts[1]}")
+                    return@launch
+                }
+                
                 Log.d(TAG, "Receiving file: $fileName ($fileSize bytes)")
                 
                 // 2. Receive Data
-                // Use filesDir/apks which is internal but accessible via FileProvider if configured
                 val apkDir = File(filesDir, "apks")
                 if (!apkDir.exists()) apkDir.mkdirs()
                 val apkFile = File(apkDir, "received_bt_wear.apk")
                 if (apkFile.exists()) apkFile.delete()
                 
-                val output = FileOutputStream(apkFile)
-                val buffer = ByteArray(8192)
+                val output = java.io.BufferedOutputStream(FileOutputStream(apkFile))
+                val buffer = ByteArray(16384) // Larger buffer
                 var bytesRead: Int
                 var totalRead = 0L
                 
                 while (totalRead < fileSize) {
                     val remaining = fileSize - totalRead
-                    try {
-                        bytesRead = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
-                    } catch (e: java.io.IOException) {
-                        if (e.message?.contains("bt socket closed") == true) {
-                            bytesRead = -1
-                        } else {
-                            throw e
-                        }
-                    }
+                    val toRead = minOf(buffer.size.toLong(), remaining).toInt()
+                    bytesRead = input.read(buffer, 0, toRead)
+                    
                     if (bytesRead == -1) {
-                        Log.e(TAG, "Socket closed during transfer. Got $totalRead of $fileSize bytes")
+                        Log.e(TAG, "Socket closed prematurely. Got $totalRead of $fileSize bytes")
                         break
                     }
-                    output.write(buffer, 0, bytesRead)
-                    totalRead += bytesRead
                     
+                    if (bytesRead > 0) {
+                        output.write(buffer, 0, bytesRead)
+                        totalRead += bytesRead
+                    }
+                    
+                    // Progress logging
                     val progressStep = (fileSize / 10).coerceAtLeast(1)
-                    if (totalRead % progressStep < 8192 || totalRead == fileSize) {
+                    if (totalRead % progressStep < buffer.size || totalRead == fileSize) {
                         Log.d(TAG, "Received: ${totalRead * 100 / fileSize}% ($totalRead / $fileSize)")
                     }
                 }
                 output.flush()
                 output.close()
                 
-                // Stabilization delay for the filesystem
+                // Stabilization delay
                 delay(1000)
 
                 if (totalRead == fileSize) {
-                    Log.d(TAG, "File received successfully: ${apkFile.absolutePath}")
+                    Log.d(TAG, "File received successfully: ${apkFile.absolutePath} (size: ${apkFile.length()})")
                     
                     // Send ACK to phone
                     try {
                         socket.outputStream.write(0x4B) // 'K' for OK
                         socket.outputStream.flush()
-                        delay(500) // Brief delay to ensure ACK is sent
+                        delay(200)
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to send ACK to phone: ${e.message}")
                     }
 
                     showInstallNotification(apkFile)
                 } else {
-                    Log.e(TAG, "File transfer incomplete. Deleted partial file.")
+                    Log.e(TAG, "File transfer incomplete ($totalRead/$fileSize). Deleted partial file.")
                     apkFile.delete()
                 }
             } catch (e: Exception) {
-                if (e is java.io.IOException && e.message?.contains("bt socket closed") == true) {
-                    Log.w(TAG, "Connection lost during file transfer: ${e.message}")
-                } else {
-                    Log.e(TAG, "File transfer error: ${e.message}", e)
-                }
+                Log.e(TAG, "File transfer error: ${e.message}", e)
             } finally {
                 try { socket.close() } catch (_: Exception) {}
             }
@@ -309,8 +307,7 @@ class FossBluetoothListenerService : Service() {
         val installIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(contentUri, "application/vnd.android.package-archive")
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or 
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
         }
 
         val pendingIntent = PendingIntent.getActivity(

@@ -36,6 +36,8 @@ object SyncDataMapper {
         val humidity = current?.relativeHumidity?.value
         data["${prefix}humidity"] = humidity?.let { "${it.toInt()}%" } ?: "--"
 
+        data["watch_version_code"] = com.steel101.wearsyncforbreezy.shared.BuildConfig.VERSION_CODE
+
         val uv = current?.uV?.value
         data["${prefix}uv"] = uv?.let { String.format(Locale.US, "%.1f", it) } ?: "--"
 
