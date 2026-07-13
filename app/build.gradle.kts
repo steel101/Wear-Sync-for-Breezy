@@ -13,12 +13,8 @@ val localProperties = Properties().apply {
 }
 
 val copyGooglePlayWearApk = tasks.register<Copy>("copyGooglePlayWearApk") {
-    val wearProject = project(":wear")
-    if (System.getenv("GITHUB_ACTIONS") == "true") {
-        dependsOn("${wearProject.path}:packageGooglePlayRelease")
-    }
-    from(wearProject.layout.buildDirectory.dir("outputs/apk/googlePlay/release"))
-    include { it.name.endsWith(".apk") && !it.name.contains("-unsigned") }
+    from("C:/Users/steel/Desktop/testWear-Sync-for-Breezy/wear/googlePlay/release")
+    include("wear-googlePlay-release.apk")
     into(layout.projectDirectory.dir("src/googlePlay/assets"))
     rename { "wear_companion.apk" }
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
@@ -53,8 +49,8 @@ android {
         applicationId = "com.steel101.wearsyncforbreezy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "1.0.51"
+        versionCode = 15
+        versionName = "1.0.52"
         resConfigs("en")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
