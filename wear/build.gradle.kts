@@ -15,6 +15,7 @@ val localProperties = Properties().apply {
 android {
     namespace = "com.steel101.wearsyncforbreezy.wear"
     compileSdk = 37
+    ndkVersion = "26.1.10909125"
 
     dependenciesInfo {
         includeInApk = false
@@ -25,8 +26,8 @@ android {
         applicationId = "com.steel101.wearsyncforbreezy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 16
-        versionName = "1.0.53"
+        versionCode = 17
+        versionName = "1.0.54"
         resConfigs("en")
         vectorDrawables {
             useSupportLibrary = true
@@ -35,25 +36,26 @@ android {
 
     signingConfigs {
         create("release") {
-            val isCi = System.getenv("GITHUB_ACTIONS") == "true"
             val storePath = project.findProperty("ANDROID_KEYSTORE_FILE")?.toString()
                 ?: System.getenv("ANDROID_KEYSTORE_FILE")
                 ?: localProperties.getProperty("ANDROID_KEYSTORE_FILE")
-                ?: if (isCi) "" else "C:/Users/steel/github"
 
-            if (storePath.isNotEmpty()) {
-                storeFile = file(storePath)
-                storePassword = project.findProperty("ANDROID_KEYSTORE_PASSWORD")?.toString()
-                    ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
-                    ?: localProperties.getProperty("ANDROID_KEYSTORE_PASSWORD")
-                
-                keyAlias = project.findProperty("ANDROID_KEY_ALIAS")?.toString()
-                    ?: System.getenv("ANDROID_KEY_ALIAS")
-                    ?: localProperties.getProperty("ANDROID_KEY_ALIAS")
+            if (!storePath.isNullOrEmpty()) {
+                val keystoreFile = file(storePath)
+                if (keystoreFile.exists()) {
+                    storeFile = keystoreFile
+                    storePassword = project.findProperty("ANDROID_KEYSTORE_PASSWORD")?.toString()
+                        ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                        ?: localProperties.getProperty("ANDROID_KEYSTORE_PASSWORD")
+                    
+                    keyAlias = project.findProperty("ANDROID_KEY_ALIAS")?.toString()
+                        ?: System.getenv("ANDROID_KEY_ALIAS")
+                        ?: localProperties.getProperty("ANDROID_KEY_ALIAS")
 
-                keyPassword = project.findProperty("ANDROID_KEY_PASSWORD")?.toString()
-                    ?: System.getenv("ANDROID_KEY_PASSWORD")
-                    ?: localProperties.getProperty("ANDROID_KEY_PASSWORD")
+                    keyPassword = project.findProperty("ANDROID_KEY_PASSWORD")?.toString()
+                        ?: System.getenv("ANDROID_KEY_PASSWORD")
+                        ?: localProperties.getProperty("ANDROID_KEY_PASSWORD")
+                }
             }
         }
     }
@@ -69,7 +71,7 @@ android {
         }
         release {
             val releaseSigningConfig = signingConfigs.getByName("release")
-            if (releaseSigningConfig.storeFile != null) {
+            if (releaseSigningConfig.storeFile != null && releaseSigningConfig.storeFile!!.exists()) {
                 signingConfig = releaseSigningConfig
             }
 
