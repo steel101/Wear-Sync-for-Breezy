@@ -20,7 +20,6 @@ class WeatherTileService : TileService() {
     override fun onTileRequest(requestParams: RequestBuilders.TileRequest): ListenableFuture<TileBuilders.Tile> {
         val sharedPrefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
 
-        // Multi-location support (if implemented in future, defaults to 0)
         val locationIndex = sharedPrefs.getInt("location_index", 0)
         val prefix = if (locationIndex == 0) "" else "loc_${locationIndex}_"
 

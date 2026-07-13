@@ -23,13 +23,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.lazy.AutoCenteringParams
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
+import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.wear.compose.material.dialog.Alert
 import androidx.wear.compose.material.dialog.Dialog
-import com.google.android.gms.wearable.*
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
+import com.steel101.wearsyncforbreezy.ui.flavorItems
+import com.steel101.wearsyncforbreezy.ui.onRefreshRequest
+import com.steel101.wearsyncforbreezy.ui.startSyncService
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -37,6 +40,11 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        try {
+            startSyncService(this)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to start sync service", e)
+        }
         val target = intent.getStringExtra("EXTRA_TILE_TARGET")
         setContent { WearApp(target) }
     }
@@ -46,57 +54,91 @@ class MainActivity : ComponentActivity() {
 fun WearApp(initialTarget: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.all { it.value }) {
+            try {
+                startSyncService(context)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to start sync service after permission grant", e)
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val permissions = mutableListOf<String>()
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            permissions.add(android.Manifest.permission.BLUETOOTH_CONNECT)
+        }
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        val neededPermissions = permissions.filter {
+            androidx.core.content.ContextCompat.checkSelfPermission(context, it) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+
+        if (neededPermissions.isNotEmpty()) {
+            permissionLauncher.launch(neededPermissions.toTypedArray())
+        }
+    }
+
     val listState = rememberScalingLazyListState()
     val scope = rememberCoroutineScope()
 
+    var refreshTrigger by remember { mutableStateOf(0) }
     var locationIndex by remember { mutableStateOf(0) }
-    var locationCount by remember { mutableStateOf(prefs.getInt("location_count", 1)) }
+    var locationCount by remember(refreshTrigger) { mutableStateOf(prefs.getInt("location_count", 1)) }
 
-    val currentPrefix = remember(locationIndex) { if (locationIndex == 0) "" else "loc_${locationIndex}_" }
+    val currentPrefix = remember(locationIndex, refreshTrigger) { if (locationIndex == 0) "" else "loc_${locationIndex}_" }
 
-    var city by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}city", "No Data") ?: "No Data") }
-    var temp by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}temp", "--") ?: "--") }
-    var tempMax by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}temp_max", "--") ?: "--") }
-    var tempMin by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}temp_min", "--") ?: "--") }
-    var condition by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}condition", "--") ?: "--") }
-    var conditionIcon by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}cond_icon", "☀️") ?: "☀️") }
+    var city by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}city", "No Data") ?: "No Data") }
+    var temp by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}temp", "--") ?: "--") }
+    var tempMax by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}temp_max", "--") ?: "--") }
+    var tempMin by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}temp_min", "--") ?: "--") }
+    var condition by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}condition", "--") ?: "--") }
+    var conditionIcon by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}cond_icon", "☀️") ?: "☀️") }
 
-    var feelsLike by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}feels_like", "--") ?: "--") }
-    var humidity by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}humidity", "--") ?: "--") }
-    var wind by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}wind", "--") ?: "--") }
-    var windOnly by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}wind_only", "--") ?: "--") }
-    var windGusts by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}wind_gusts", "") ?: "") }
-    var uv by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}uv", "--") ?: "--") }
-    var aqi by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}aqi", "--") ?: "--") }
-    var aqiName by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}aqi_name", "") ?: "") }
-    var aqiColor by remember(locationIndex) { mutableStateOf(prefs.getInt("${currentPrefix}aqi_color", 0)) }
-    var visibility by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}visibility", "--") ?: "--") }
-    var pressure by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}pressure", "--") ?: "--") }
-    var dewPoint by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}dew_point", "--") ?: "--") }
-    var rainChance by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}precip_prob", "--") ?: "--") }
+    var feelsLike by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}feels_like", "--") ?: "--") }
+    var humidity by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}humidity", "--") ?: "--") }
+    var wind by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}wind", "--") ?: "--") }
+    var windOnly by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}wind_only", "--") ?: "--") }
+    var windGusts by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}wind_gusts", "") ?: "") }
+    var uv by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}uv", "--") ?: "--") }
+    var aqi by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}aqi", "--") ?: "--") }
+    var aqiName by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}aqi_name", "") ?: "") }
+    var aqiColor by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getInt("${currentPrefix}aqi_color", 0)) }
+    var visibility by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}visibility", "--") ?: "--") }
+    var pressure by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}pressure", "--") ?: "--") }
+    var dewPoint by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}dew_point", "--") ?: "--") }
+    var rainChance by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}precip_prob", "--") ?: "--") }
 
-    var bulletinNow by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}bulletin_now", "") ?: "") }
-    var bulletinNext by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}bulletin_next", "") ?: "") }
+    var bulletinNow by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}bulletin_now", "") ?: "") }
+    var bulletinNext by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}bulletin_next", "") ?: "") }
 
-    var cloudCover by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}cloud_cover", "--") ?: "--") }
-    var ceiling by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}ceiling", "--") ?: "--") }
-    var sunshine by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}sunshine", "--") ?: "--") }
+    var cloudCover by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}cloud_cover", "--") ?: "--") }
+    var ceiling by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}ceiling", "--") ?: "--") }
+    var sunshine by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}sunshine", "--") ?: "--") }
 
-    var pollenTree by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}pollen_tree", "--") ?: "--") }
-    var pollenGrass by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}pollen_grass", "--") ?: "--") }
-    var pollenWeed by remember(locationIndex) { mutableStateOf(prefs.getString("${currentPrefix}pollen_weed", "--") ?: "--") }
+    var pollenTree by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}pollen_tree", "--") ?: "--") }
+    var pollenGrass by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}pollen_grass", "--") ?: "--") }
+    var pollenWeed by remember(currentPrefix, refreshTrigger) { mutableStateOf(prefs.getString("${currentPrefix}pollen_weed", "--") ?: "--") }
 
-    var alertList by remember(locationIndex) { mutableStateOf(loadAlerts(prefs, currentPrefix)) }
-    var minutelyForecast by remember(locationIndex) { mutableStateOf(loadMinutely(prefs, currentPrefix)) }
-    var hourlyForecast by remember(locationIndex) { mutableStateOf(loadHourly(prefs, currentPrefix)) }
-    var dailyForecast by remember(locationIndex) { mutableStateOf(loadDaily(prefs, currentPrefix)) }
+    var alertList by remember(currentPrefix, refreshTrigger) { mutableStateOf(loadAlerts(prefs, currentPrefix)) }
+    var minutelyForecast by remember(currentPrefix, refreshTrigger) { mutableStateOf(loadMinutely(prefs, currentPrefix)) }
+    var hourlyForecast by remember(currentPrefix, refreshTrigger) { mutableStateOf(loadHourly(prefs, currentPrefix)) }
+    var dailyForecast by remember(currentPrefix, refreshTrigger) { mutableStateOf(loadDaily(prefs, currentPrefix)) }
 
     var hourlyExpanded by remember { mutableStateOf(false) }
 
     var selectedHour by remember { mutableStateOf<HourData?>(null) }
     var selectedAlert by remember { mutableStateOf<AlertData?>(null) }
     var selectedNowcast by remember { mutableStateOf<MinutelyData?>(null) }
-    var lastSync by remember {
+    var lastSync by remember(refreshTrigger) {
         val ts = prefs.getLong("timestamp", 0)
         mutableStateOf(if (ts > 0) formatTime(ts) else "Never")
     }
@@ -109,51 +151,11 @@ fun WearApp(initialTarget: String? = null) {
     }
 
     DisposableEffect(Unit) {
-        val dataClient = Wearable.getDataClient(context)
-        val listener = DataClient.OnDataChangedListener { events ->
-            events.forEach { event ->
-                if (event.type == DataEvent.TYPE_CHANGED && event.dataItem.uri.path == "/weather_data") {
-                    val map = DataMapItem.fromDataItem(event.dataItem).dataMap
-                    locationCount = map.getInt("location_count", 1)
-                    val prefix = if (locationIndex == 0) "" else "loc_${locationIndex}_"
-
-                    city = map.getString("${prefix}city") ?: city
-                    temp = map.getString("${prefix}temp") ?: temp
-                    tempMax = map.getString("${prefix}temp_max") ?: tempMax
-                    tempMin = map.getString("${prefix}temp_min") ?: tempMin
-                    condition = map.getString("${prefix}condition") ?: condition
-                    conditionIcon = map.getString("${prefix}cond_icon") ?: conditionIcon
-                    feelsLike = map.getString("${prefix}feels_like") ?: feelsLike
-                    humidity = map.getString("${prefix}humidity") ?: humidity
-                    wind = map.getString("${prefix}wind") ?: wind
-                    windOnly = map.getString("${prefix}wind_only") ?: "--"
-                    windGusts = map.getString("${prefix}wind_gusts") ?: ""
-                    uv = map.getString("${prefix}uv") ?: uv
-                    aqi = map.getString("${prefix}aqi") ?: aqi
-                    aqiName = map.getString("${prefix}aqi_name") ?: ""
-                    aqiColor = map.getInt("${prefix}aqi_color")
-                    visibility = map.getString("${prefix}visibility") ?: visibility
-                    pressure = map.getString("${prefix}pressure") ?: pressure
-                    dewPoint = map.getString("${prefix}dew_point") ?: dewPoint
-                    rainChance = map.getString("${prefix}precip_prob") ?: rainChance
-                    bulletinNow = map.getString("${prefix}bulletin_now") ?: ""
-                    bulletinNext = map.getString("${prefix}bulletin_next") ?: ""
-                    cloudCover = map.getString("${prefix}cloud_cover") ?: "--"
-                    ceiling = map.getString("${prefix}ceiling") ?: "--"
-                    sunshine = map.getString("${prefix}sunshine") ?: "--"
-                    pollenTree = map.getString("${prefix}pollen_tree") ?: "--"
-                    pollenGrass = map.getString("${prefix}pollen_grass") ?: "--"
-                    pollenWeed = map.getString("${prefix}pollen_weed") ?: "--"
-                    alertList = loadAlertsFromMap(map, prefix)
-                    minutelyForecast = loadMinutelyFromMap(map, prefix)
-                    hourlyForecast = loadHourlyFromMap(map, prefix)
-                    dailyForecast = loadDailyFromMap(map, prefix)
-                    lastSync = formatTime(map.getLong("timestamp"))
-                }
-            }
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            refreshTrigger++
         }
-        dataClient.addListener(listener)
-        onDispose { dataClient.removeListener(listener) }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
     MaterialTheme {
@@ -213,15 +215,13 @@ fun WearApp(initialTarget: String? = null) {
 
                 if (alertList.isNotEmpty()) {
                     item { Spacer(Modifier.height(8.dp)) }
-                    for (alert in alertList) {
-                        item {
-                            Chip(
-                                onClick = { selectedAlert = alert },
-                                label = { Text(alert.title, maxLines = 1) },
-                                colors = ChipDefaults.chipColors(backgroundColor = Color.Red.copy(alpha = 0.3f)),
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-                            )
-                        }
+                    items(alertList, key = { it.title + it.description.hashCode() }) { alert ->
+                        Chip(
+                            onClick = { selectedAlert = alert },
+                            label = { Text(alert.title, maxLines = 1) },
+                            colors = ChipDefaults.chipColors(backgroundColor = Color.Red.copy(alpha = 0.3f)),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                        )
                     }
                 }
 
@@ -376,7 +376,7 @@ fun WearApp(initialTarget: String? = null) {
                                     }
                                 }
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size(42.dp)) {
-                                    val rotation = (prefs.getFloat("${currentPrefix}wind_dir", 0f))
+                                    val rotation = (prefs.getSafeFloat("${currentPrefix}wind_dir", 0f))
                                     Text(
                                         "↑",
                                         color = Color(0xFF4A90E2),
@@ -473,24 +473,13 @@ fun WearApp(initialTarget: String? = null) {
                     }
                 }
 
+                flavorItems()
                 item { Spacer(Modifier.height(12.dp)) }
                 item { Text(text = "Sync: $lastSync", style = MaterialTheme.typography.caption2, color = Color.Gray) }
                 item { Spacer(Modifier.height(8.dp)) }
                 item {
-                    val scope = rememberCoroutineScope()
                     Chip(
-                        onClick = {
-                            scope.launch {
-                                try {
-                                    val nodes = Wearable.getNodeClient(context).connectedNodes.await()
-                                    nodes.forEach { node ->
-                                        Wearable.getMessageClient(context).sendMessage(node.id, "/request_refresh", null).await()
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e("MainActivity", "Failed refresh", e)
-                                }
-                            }
-                        },
+                        onClick = { onRefreshRequest(context, scope) },
                         label = { Text("Refresh") },
                         icon = { Icon(Icons.Default.Refresh, contentDescription = "Refresh") },
                         colors = ChipDefaults.secondaryChipColors(),
@@ -717,35 +706,7 @@ fun loadMinutely(prefs: SharedPreferences, prefix: String): List<MinutelyData> {
         return (0 until count).map { i ->
             MinutelyData(
                 time = prefs.getLong("${prefix}min_time_$i", 0L),
-                intensity = prefs.getFloat("${prefix}min_val_$i", 0.0f).toDouble()
-            )
-        }
-    } catch (_: Exception) { return emptyList() }
-}
-
-fun loadAlertsFromMap(dataMap: DataMap, prefix: String): List<AlertData> {
-    try {
-        val count = dataMap.getInt("${prefix}alert_count")
-        return (0 until count).map { i ->
-            AlertData(
-                title = dataMap.getString("${prefix}alert_title_$i") ?: "",
-                description = dataMap.getString("${prefix}alert_desc_$i") ?: "",
-                instruction = dataMap.getString("${prefix}alert_instr_$i") ?: "",
-                source = dataMap.getString("${prefix}alert_source_$i") ?: "",
-                severity = dataMap.getInt("${prefix}alert_severity_$i"),
-                color = dataMap.getString("${prefix}alert_color_$i") ?: ""
-            )
-        }
-    } catch (_: Exception) { return emptyList() }
-}
-
-fun loadMinutelyFromMap(dataMap: DataMap, prefix: String): List<MinutelyData> {
-    try {
-        val count = dataMap.getInt("${prefix}min_count")
-        return (0 until count).map { i ->
-            MinutelyData(
-                time = dataMap.getLong("${prefix}min_time_$i"),
-                intensity = dataMap.getDouble("${prefix}min_val_$i")
+                intensity = prefs.getSafeFloat("${prefix}min_val_$i", 0.0f).toDouble()
             )
         }
     } catch (_: Exception) { return emptyList() }
@@ -775,35 +736,6 @@ fun loadDaily(prefs: SharedPreferences, prefix: String): List<DayData> {
                 icon = prefs.getString("${prefix}fc_icon_$i", "☀️") ?: "☀️",
                 max = prefs.getString("${prefix}fc_max_$i", "--") ?: "--",
                 min = prefs.getString("${prefix}fc_min_$i", "--") ?: "--"
-            )
-        }
-    } catch (_: Exception) { return emptyList() }
-}
-
-fun loadHourlyFromMap(dataMap: DataMap, prefix: String): List<HourData> {
-    try {
-        val count = dataMap.getInt("${prefix}h_count")
-        return (0 until count).map { i ->
-            HourData(
-                time = dataMap.getString("${prefix}h_time_$i") ?: "--:--",
-                icon = dataMap.getString("${prefix}h_cond_icon_$i") ?: "☀️",
-                temp = dataMap.getString("${prefix}h_temp_$i") ?: "--",
-                precip = dataMap.getString("${prefix}h_precip_$i") ?: "",
-                condition = dataMap.getString("${prefix}h_cond_$i") ?: ""
-            )
-        }
-    } catch (_: Exception) { return emptyList() }
-}
-
-fun loadDailyFromMap(dataMap: DataMap, prefix: String): List<DayData> {
-    try {
-        val count = dataMap.getInt("${prefix}fc_count")
-        return (0 until count).map { i ->
-            DayData(
-                name = dataMap.getString("${prefix}fc_day_$i") ?: "--",
-                icon = dataMap.getString("${prefix}fc_icon_$i") ?: "☀️",
-                max = dataMap.getString("${prefix}fc_max_$i") ?: "--",
-                min = dataMap.getString("${prefix}fc_min_$i") ?: "--"
             )
         }
     } catch (_: Exception) { return emptyList() }

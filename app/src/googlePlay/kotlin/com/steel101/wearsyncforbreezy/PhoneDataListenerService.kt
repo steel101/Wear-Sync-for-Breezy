@@ -1,7 +1,7 @@
 package com.steel101.wearsyncforbreezy
 
 import android.util.Log
-import com.steel101.wearsyncforbreezy.sync.WearSyncHelper
+import com.steel101.wearsyncforbreezy.sync.SyncProvider
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import kotlinx.coroutines.CoroutineScope
@@ -19,7 +19,7 @@ class PhoneDataListenerService : WearableListenerService() {
             scope.launch {
                 val locations = BreezyDataFetcher.fetchAllWeatherData(this@PhoneDataListenerService)
                 if (locations.isNotEmpty()) {
-                    WearSyncHelper.syncWeather(this@PhoneDataListenerService, locations)
+                    SyncProvider.getManager().syncWeather(this@PhoneDataListenerService, locations)
                     Log.d(TAG, "Manual refresh complete for ${locations.size} locations")
                 } else {
                     Log.w(TAG, "Manual refresh failed: No data found")

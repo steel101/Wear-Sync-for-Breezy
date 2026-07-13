@@ -76,7 +76,6 @@ class DailyTileService : TileService() {
                                 .build()
                         )
 
-                        // Vertical Grid Line
                         if (col < 2 && i < fcCount - 1) {
                             rowLayout.addContent(
                                 LayoutElementBuilders.Box.Builder()
@@ -94,7 +93,6 @@ class DailyTileService : TileService() {
                 if (addedInRow > 0) {
                     grid.addContent(rowLayout.build())
 
-                    // Horizontal Row Line
                     if (row == 0 && fcCount > 3) {
                         grid.addContent(
                             LayoutElementBuilders.Box.Builder()

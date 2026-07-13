@@ -9,6 +9,11 @@ android {
 
     defaultConfig {
         minSdk = 26
+        buildConfigField("int", "VERSION_CODE", "16")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {
@@ -20,5 +25,4 @@ android {
 dependencies {
     api(libs.breezy.datasharing)
     implementation(libs.kotlinx.serialization.json)
-    implementation("org.json:json:20250107")
 }

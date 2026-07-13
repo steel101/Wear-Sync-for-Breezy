@@ -34,7 +34,7 @@ class RainChanceComplicationService : ComplicationDataSourceService() {
             }
             ComplicationType.RANGED_VALUE -> {
                 val value = rainChance.filter { it.isDigit() }.toFloatOrNull() ?: 0f
-                val color = 0xFF448AFF.toInt() // Blue for rain
+                val color = 0xFF448AFF.toInt()
                 RangedValueComplicationData.Builder(
                     value = value,
                     min = 0f,

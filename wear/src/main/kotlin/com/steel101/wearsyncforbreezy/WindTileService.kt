@@ -18,13 +18,12 @@ class WindTileService : TileService() {
     override fun onTileRequest(requestParams: RequestBuilders.TileRequest): ListenableFuture<TileBuilders.Tile> {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
 
-        // Multi-location support (if implemented in future, defaults to 0)
         val locationIndex = prefs.getInt("location_index", 0)
         val prefix = if (locationIndex == 0) "" else "loc_${locationIndex}_"
 
         val windOnly = prefs.getString("${prefix}wind_only", "--") ?: "--"
         val gusts = prefs.getString("${prefix}wind_gusts", "") ?: ""
-        val degree = prefs.getFloat("${prefix}wind_dir", -1f)
+        val degree = prefs.getSafeFloat("${prefix}wind_dir", -1f)
         val timestamp = prefs.getLong("timestamp", 0)
 
         val launchAction = ActionBuilders.LaunchAction.Builder()
@@ -54,12 +53,10 @@ class WindTileService : TileService() {
             )
             .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(DimensionBuilders.dp(4f)).build())
 
-        // Compass Graphic
         val compassBox = LayoutElementBuilders.Box.Builder()
             .setWidth(DimensionBuilders.dp(100f))
             .setHeight(DimensionBuilders.dp(100f))
             .addContent(
-                // Outer Ring
                 LayoutElementBuilders.Arc.Builder()
                     .addContent(
                         LayoutElementBuilders.ArcLine.Builder()
@@ -97,7 +94,6 @@ class WindTileService : TileService() {
         compassBox.addContent(cardinalText("S", 180f))
         compassBox.addContent(cardinalText("W", 270f))
 
-        // Wind Needle
         if (degree != -1f) {
             compassBox.addContent(
                 LayoutElementBuilders.Arc.Builder()

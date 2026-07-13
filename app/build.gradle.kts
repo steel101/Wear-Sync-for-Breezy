@@ -1,6 +1,39 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+val copyGooglePlayWearApk = tasks.register<Copy>("copyGooglePlayWearApk") {
+    from("C:/Users/steel/Desktop/testWear-Sync-for-Breezy/wear/googlePlay/release")
+    include("wear-googlePlay-release.apk")
+    into(layout.projectDirectory.dir("src/googlePlay/assets"))
+    rename { "wear_companion.apk" }
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+val copyFossWearApk = tasks.register<Copy>("copyFossWearApk") {
+    val wearProject = project(":wear")
+    if (System.getenv("GITHUB_ACTIONS") == "true") {
+        dependsOn("${wearProject.path}:packageFossRelease")
+    }
+
+    from(wearProject.layout.projectDirectory.dir("foss/release"))
+    from(wearProject.layout.buildDirectory.dir("outputs/apk/foss/release"))
+
+    include("*.apk")
+    exclude("*unsigned*")
+    into(layout.projectDirectory.dir("src/foss/assets"))
+    rename { "wear_companion.apk" }
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
 android {
@@ -16,15 +49,48 @@ android {
         applicationId = "com.steel101.wearsyncforbreezy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.37"
+        versionCode = 16
+        versionName = "1.0.53"
         resConfigs("en")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val isCi = System.getenv("GITHUB_ACTIONS") == "true"
+            val storePath = project.findProperty("ANDROID_KEYSTORE_FILE")?.toString()
+                ?: localProperties.getProperty("ANDROID_KEYSTORE_FILE")
+                ?: if (isCi) "" else "C:/Users/steel/github"
+
+            if (storePath.isNotEmpty()) {
+                storeFile = file(storePath)
+                storePassword = project.findProperty("ANDROID_KEYSTORE_PASSWORD")?.toString()
+                    ?: localProperties.getProperty("ANDROID_KEYSTORE_PASSWORD")
+                
+                keyAlias = project.findProperty("ANDROID_KEY_ALIAS")?.toString()
+                    ?: localProperties.getProperty("ANDROID_KEY_ALIAS")
+
+                keyPassword = project.findProperty("ANDROID_KEY_PASSWORD")?.toString()
+                    ?: localProperties.getProperty("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
         release {
+            val releaseSigningConfig = signingConfigs.getByName("release")
+            if (releaseSigningConfig.storeFile != null) {
+                signingConfig = releaseSigningConfig
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -33,12 +99,51 @@ android {
             )
         }
     }
+
+    flavorDimensions += "store"
+    productFlavors {
+        create("googlePlay") {
+            dimension = "store"
+        }
+        create("foss") {
+            dimension = "store"
+            ndk {
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            }
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    project.afterEvaluate {
+        tasks.named("mergeGooglePlayReleaseAssets") { dependsOn(copyGooglePlayWearApk) }
+        tasks.named("mergeGooglePlayDebugAssets") { dependsOn(copyGooglePlayWearApk) }
+        tasks.named("mergeFossReleaseAssets") { dependsOn(copyFossWearApk) }
+        tasks.named("mergeFossDebugAssets") { dependsOn(copyFossWearApk) }
+        
+        tasks.matching { it.name.contains("lint", ignoreCase = true) }.configureEach {
+            if (name.contains("GooglePlay", ignoreCase = true)) {
+                dependsOn(copyGooglePlayWearApk)
+            } else if (name.contains("Foss", ignoreCase = true)) {
+                dependsOn(copyFossWearApk)
+            }
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/INDEX.LIST"
+            excludes += "/META-INF/io.netty.versions.properties"
+            excludes += "/META-INF/native-image/**"
+            excludes += "/META-INF/okio.kotlin_module"
+        }
     }
 }
 
@@ -52,8 +157,19 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.play.services.wearable)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+    implementation(libs.androidx.startup)
+
+    "googlePlayImplementation"(libs.play.services.wearable)
+    "googlePlayImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+    "googlePlayImplementation"(libs.libadb)
+    "googlePlayImplementation"(libs.libconscrypt)
+    "googlePlayImplementation"(libs.libsun.security)
+
+    "fossImplementation"(libs.hivemq.mqtt.client)
+    "fossImplementation"(libs.libadb)
+    "fossImplementation"(libs.libconscrypt)
+    "fossImplementation"(libs.libsun.security)
+
     implementation(project(":shared"))
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

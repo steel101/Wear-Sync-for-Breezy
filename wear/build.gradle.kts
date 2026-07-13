@@ -1,10 +1,19 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
 
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
 android {
-    namespace = "com.steel101.wearsyncforbreezy"
+    namespace = "com.steel101.wearsyncforbreezy.wear"
     compileSdk = 37
 
     dependenciesInfo {
@@ -16,32 +25,98 @@ android {
         applicationId = "com.steel101.wearsyncforbreezy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.37"
+        versionCode = 16
+        versionName = "1.0.53"
         resConfigs("en")
         vectorDrawables {
             useSupportLibrary = true
         }
     }
 
+    signingConfigs {
+        create("release") {
+            val isCi = System.getenv("GITHUB_ACTIONS") == "true"
+            val storePath = project.findProperty("ANDROID_KEYSTORE_FILE")?.toString()
+                ?: System.getenv("ANDROID_KEYSTORE_FILE")
+                ?: localProperties.getProperty("ANDROID_KEYSTORE_FILE")
+                ?: if (isCi) "" else "C:/Users/steel/github"
+
+            if (storePath.isNotEmpty()) {
+                storeFile = file(storePath)
+                storePassword = project.findProperty("ANDROID_KEYSTORE_PASSWORD")?.toString()
+                    ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                    ?: localProperties.getProperty("ANDROID_KEYSTORE_PASSWORD")
+                
+                keyAlias = project.findProperty("ANDROID_KEY_ALIAS")?.toString()
+                    ?: System.getenv("ANDROID_KEY_ALIAS")
+                    ?: localProperties.getProperty("ANDROID_KEY_ALIAS")
+
+                keyPassword = project.findProperty("ANDROID_KEY_PASSWORD")?.toString()
+                    ?: System.getenv("ANDROID_KEY_PASSWORD")
+                    ?: localProperties.getProperty("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
         release {
+            val releaseSigningConfig = signingConfigs.getByName("release")
+            if (releaseSigningConfig.storeFile != null) {
+                signingConfig = releaseSigningConfig
+            }
+
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
+
+    flavorDimensions += "store"
+    productFlavors {
+        create("googlePlay") {
+            dimension = "store"
+        }
+        create("foss") {
+            dimension = "store"
+            ndk {
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            }
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/INDEX.LIST"
+            excludes += "/META-INF/io.netty.versions.properties"
+            excludes += "/META-INF/native-image/**"
+            excludes += "/META-INF/okio.kotlin_module"
+        }
     }
 }
 
 dependencies {
-    implementation(libs.play.services.wearable)
+    "googlePlayImplementation"(libs.play.services.wearable)
+    "googlePlayImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+
+    "fossImplementation"(libs.hivemq.mqtt.client)
+
     implementation("androidx.wear.tiles:tiles:1.4.1")
     implementation("androidx.wear.tiles:tiles-material:1.4.1")
     implementation("androidx.wear.protolayout:protolayout:1.2.1")
@@ -54,6 +129,8 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.startup)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -61,7 +138,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material.icons.core)
 
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     implementation("androidx.concurrent:concurrent-futures-ktx:1.2.0")
     implementation(project(":shared"))
 
