@@ -135,7 +135,14 @@ android {
         tasks.named("mergeGooglePlayDebugAssets") { dependsOn(copyGooglePlayWearApk) }
         tasks.named("mergeFossReleaseAssets") { dependsOn(copyFossWearApk) }
         tasks.named("mergeFossDebugAssets") { dependsOn(copyFossWearApk) }
-        
+
+        tasks.matching { it.name.contains("Assets") }.configureEach { dependsOn(copyGooglePlayWearApk, copyFossWearApk) }
+
+        tasks.matching { it.name.startsWith("package") }.configureEach {
+            mustRunAfter(copyGooglePlayWearApk, copyFossWearApk)
+
+        }
+
         tasks.matching { it.name.contains("lint", ignoreCase = true) }.configureEach {
             if (name.contains("GooglePlay", ignoreCase = true)) {
                 dependsOn(copyGooglePlayWearApk)

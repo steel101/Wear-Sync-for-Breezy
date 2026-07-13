@@ -26,6 +26,7 @@
 -dontwarn javax.util.concurrent.**
 -dontwarn java.lang.instrument.**
 -dontwarn javax.inject.**
+-dontwarn reactor.blockhound.**
 
 -keep class com.hivemq.client.** { *; }
 -keep class io.netty.** { *; }
