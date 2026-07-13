@@ -49,8 +49,8 @@ android {
         applicationId = "com.steel101.wearsyncforbreezy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "1.0.52"
+        versionCode = 16
+        versionName = "1.0.53"
         resConfigs("en")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

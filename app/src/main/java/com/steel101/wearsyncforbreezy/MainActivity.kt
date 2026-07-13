@@ -108,7 +108,13 @@ fun WeatherSyncScreen(
     val watchStatus by viewModel.watchStatus.collectAsState()
 
     val prefs = remember { context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE) }
-    var firstLaunch by remember { mutableStateOf(prefs.getBoolean("first_launch_setup", true)) }
+    val currentFlavor = BuildConfig.FLAVOR
+    val lastFlavor = remember { prefs.getString("last_store_flavor", "") }
+    val flavorChangedToFoss = currentFlavor == "foss" && lastFlavor == "googlePlay"
+    
+    var firstLaunch by remember { 
+        mutableStateOf(prefs.getBoolean("first_launch_setup", true) || flavorChangedToFoss) 
+    }
 
     SetupInstructions(
         showLoading = firstLaunch,
@@ -117,6 +123,8 @@ fun WeatherSyncScreen(
                 firstLaunch = false
                 prefs.edit().putBoolean("first_launch_setup", false).apply()
             }
+            // Record current flavor after setup or transition is acknowledged
+            prefs.edit().putString("last_store_flavor", currentFlavor).apply()
         },
         viewModel = viewModel
     )
@@ -142,12 +150,15 @@ fun WeatherSyncScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(currentFlavor) {
         viewModel.loadCachedTime(context)
         viewModel.checkAndFetchInitialData(context)
         viewModel.updateWatchStatus(context)
 
-        // Request Bluetooth permissions on launch if not granted (FOSS/Auto mode)
+        if (prefs.getString("last_store_flavor", "") != currentFlavor) {
+            prefs.edit().putString("last_store_flavor", currentFlavor).apply()
+        }
+
         val mode = context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
             .getString("sync_mode", "AUTO")
         if ((mode == "BLUETOOTH" || mode == "AUTO") && !viewModel.hasBluetoothPermission(context)) {
