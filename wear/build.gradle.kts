@@ -42,7 +42,7 @@ android {
 
             if (!storePath.isNullOrEmpty()) {
                 val keystoreFile = file(storePath)
-                if (keystoreFile.isFile) {
+                if (keystoreFile.exists()) {
                     storeFile = keystoreFile
                     storePassword = project.findProperty("ANDROID_KEYSTORE_PASSWORD")?.toString()
                         ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")

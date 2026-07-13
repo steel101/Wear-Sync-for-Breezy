@@ -13,8 +13,13 @@ val localProperties = Properties().apply {
 }
 
 val copyGooglePlayWearApk = tasks.register<Copy>("copyGooglePlayWearApk") {
-    from("C:/Users/steel/Desktop/testWear-Sync-for-Breezy/wear/googlePlay/release")
-    include("wear-googlePlay-release.apk")
+    val wearProject = project(":wear")
+    dependsOn("${wearProject.path}:packageGooglePlayRelease")
+
+    from(wearProject.layout.buildDirectory.dir("outputs/apk/googlePlay/release"))
+
+    include("*.apk")
+    exclude("*unsigned*")
     into(layout.projectDirectory.dir("src/googlePlay/assets"))
     rename { "wear_companion.apk" }
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
