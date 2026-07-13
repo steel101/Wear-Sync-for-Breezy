@@ -23,10 +23,13 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
+      - name: Install Required Build Tools for Signing
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;29.0.3"
+
       - name: Extract Version Name from Gradle
         id: get_version
         run: |
-          # Works seamlessly for both Groovy (build.gradle) and Kotlin (build.gradle.kts)
           VERSION_NAME=$(grep -m 1 "versionName" app/build.gradle* | tr -d '[:space:]' | cut -d'"' -f2 | cut -d"'" -f2)
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
 
