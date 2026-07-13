@@ -26,8 +26,8 @@ android {
         applicationId = "com.steel101.wearsyncforbreezy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17
-        versionName = "1.0.54"
+        versionCode = 19
+        versionName = "1.0.55"
         resConfigs("en")
         vectorDrawables {
             useSupportLibrary = true
@@ -42,7 +42,7 @@ android {
 
             if (!storePath.isNullOrEmpty()) {
                 val keystoreFile = file(storePath)
-                if (keystoreFile.exists()) {
+                if (keystoreFile.isFile) {
                     storeFile = keystoreFile
                     storePassword = project.findProperty("ANDROID_KEYSTORE_PASSWORD")?.toString()
                         ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
