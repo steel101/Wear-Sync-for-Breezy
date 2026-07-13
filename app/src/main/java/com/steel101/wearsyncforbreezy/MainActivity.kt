@@ -117,7 +117,8 @@ fun WeatherSyncScreen(
                 firstLaunch = false
                 prefs.edit().putBoolean("first_launch_setup", false).apply()
             }
-        }
+        },
+        viewModel = viewModel
     )
 
     val permissionLauncher = rememberLauncherForActivityResult(

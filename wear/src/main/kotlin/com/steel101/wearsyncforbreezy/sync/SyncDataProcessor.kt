@@ -43,6 +43,12 @@ object SyncDataProcessor {
             }
         }
         editor.apply()
+        
+        // Report watch version back to phone
+        // Since we are in the :wear module, we use the wear-specific BuildConfig or the shared one
+        val watchVersion = com.steel101.wearsyncforbreezy.wear.BuildConfig.VERSION_CODE
+        prefs.edit().putInt("watch_version_code", watchVersion).apply()
+
         triggerUpdates(context)
     }
 

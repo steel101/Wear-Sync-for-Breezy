@@ -14,20 +14,30 @@ val localProperties = Properties().apply {
 
 val copyGooglePlayWearApk = tasks.register<Copy>("copyGooglePlayWearApk") {
     val wearProject = project(":wear")
-    dependsOn("${wearProject.path}:assembleGooglePlayRelease")
+    if (System.getenv("GITHUB_ACTIONS") == "true") {
+        dependsOn("${wearProject.path}:packageGooglePlayRelease")
+    }
     from(wearProject.layout.buildDirectory.dir("outputs/apk/googlePlay/release"))
     include { it.name.endsWith(".apk") && !it.name.contains("-unsigned") }
     into(layout.projectDirectory.dir("src/googlePlay/assets"))
     rename { "wear_companion.apk" }
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
 val copyFossWearApk = tasks.register<Copy>("copyFossWearApk") {
     val wearProject = project(":wear")
-    dependsOn("${wearProject.path}:assembleFossRelease")
+    if (System.getenv("GITHUB_ACTIONS") == "true") {
+        dependsOn("${wearProject.path}:packageFossRelease")
+    }
+
+    from(wearProject.layout.projectDirectory.dir("foss/release"))
     from(wearProject.layout.buildDirectory.dir("outputs/apk/foss/release"))
-    include { it.name.endsWith(".apk") && !it.name.contains("-unsigned") }
+
+    include("*.apk")
+    exclude("*unsigned*")
     into(layout.projectDirectory.dir("src/foss/assets"))
     rename { "wear_companion.apk" }
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
 android {
@@ -43,8 +53,8 @@ android {
         applicationId = "com.steel101.wearsyncforbreezy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.0.49"
+        versionCode = 13
+        versionName = "1.0.50"
         resConfigs("en")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -54,34 +64,35 @@ android {
         create("release") {
             val isCi = System.getenv("GITHUB_ACTIONS") == "true"
             val storePath = project.findProperty("ANDROID_KEYSTORE_FILE")?.toString()
-                ?: System.getenv("ANDROID_KEYSTORE_FILE")
                 ?: localProperties.getProperty("ANDROID_KEYSTORE_FILE")
                 ?: if (isCi) "" else "C:/Users/steel/github"
 
             if (storePath.isNotEmpty()) {
-                val storeFilePath = file(storePath)
-                if (storeFilePath.exists()) {
-                    storeFile = storeFilePath
-                    storePassword = project.findProperty("ANDROID_KEYSTORE_PASSWORD")?.toString()
-                        ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
-                        ?: localProperties.getProperty("ANDROID_KEYSTORE_PASSWORD")
-                    
-                    keyAlias = project.findProperty("ANDROID_KEY_ALIAS")?.toString()
-                        ?: System.getenv("ANDROID_KEY_ALIAS")
-                        ?: localProperties.getProperty("ANDROID_KEY_ALIAS")
+                storeFile = file(storePath)
+                storePassword = project.findProperty("ANDROID_KEYSTORE_PASSWORD")?.toString()
+                    ?: localProperties.getProperty("ANDROID_KEYSTORE_PASSWORD")
+                
+                keyAlias = project.findProperty("ANDROID_KEY_ALIAS")?.toString()
+                    ?: localProperties.getProperty("ANDROID_KEY_ALIAS")
 
-                    keyPassword = project.findProperty("ANDROID_KEY_PASSWORD")?.toString()
-                        ?: System.getenv("ANDROID_KEY_PASSWORD")
-                        ?: localProperties.getProperty("ANDROID_KEY_PASSWORD")
-                }
+                keyPassword = project.findProperty("ANDROID_KEY_PASSWORD")?.toString()
+                    ?: localProperties.getProperty("ANDROID_KEY_PASSWORD")
             }
         }
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
         release {
             val releaseSigningConfig = signingConfigs.getByName("release")
-            if (releaseSigningConfig.storeFile?.exists() == true) {
+            if (releaseSigningConfig.storeFile != null) {
                 signingConfig = releaseSigningConfig
             }
             isMinifyEnabled = true
@@ -100,6 +111,9 @@ android {
         }
         create("foss") {
             dimension = "store"
+            ndk {
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            }
         }
     }
 
@@ -151,8 +165,14 @@ dependencies {
 
     "googlePlayImplementation"(libs.play.services.wearable)
     "googlePlayImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+    "googlePlayImplementation"(libs.libadb)
+    "googlePlayImplementation"(libs.libconscrypt)
+    "googlePlayImplementation"(libs.libsun.security)
 
     "fossImplementation"(libs.hivemq.mqtt.client)
+    "fossImplementation"(libs.libadb)
+    "fossImplementation"(libs.libconscrypt)
+    "fossImplementation"(libs.libsun.security)
 
     implementation(project(":shared"))
     testImplementation(libs.junit)

@@ -81,3 +81,8 @@
 # Wearable API
 -keep class com.google.android.gms.wearable.** { *; }
 -keep class * extends com.google.android.gms.wearable.WearableListenerService { *; }
+
+# LibADB Android
+-keep class io.github.muntashirakon.adb.** { *; }
+-keep class android.sun.security.** { *; }
+-keep class org.conscrypt.** { *; }

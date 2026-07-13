@@ -45,7 +45,7 @@ object FossBluetoothSyncManager : WeatherSyncManager {
         var success = false
 
         for (device in sortedDevices) {
-            if (trySyncToDevice(device, payload)) {
+            if (trySyncToDevice(context, device, payload)) {
                 success = true
                 break
             }
@@ -60,7 +60,7 @@ object FossBluetoothSyncManager : WeatherSyncManager {
     suspend fun syncWeatherToDevice(context: Context, device: BluetoothDevice, locations: List<BreezyLocation>) = withContext(Dispatchers.IO) {
         if (locations.isEmpty()) return@withContext
         val payload = buildPayload(locations)
-        if (trySyncToDevice(device, payload)) {
+        if (trySyncToDevice(context, device, payload)) {
             saveSyncTime(context)
         } else {
             throw Exception("Failed to sync to requested device ${device.name}")
@@ -96,7 +96,7 @@ object FossBluetoothSyncManager : WeatherSyncManager {
     }
 
     @SuppressLint("MissingPermission")
-    private suspend fun trySyncToDevice(device: BluetoothDevice, payload: String): Boolean {
+    private suspend fun trySyncToDevice(context: Context, device: BluetoothDevice, payload: String): Boolean {
         return btMutex.withLock {
             var socket: BluetoothSocket? = null
             try {
@@ -104,10 +104,23 @@ object FossBluetoothSyncManager : WeatherSyncManager {
                 socket.outputStream.write(payload.toByteArray(Charsets.UTF_8))
                 socket.outputStream.flush()
                 
-                // Reduced delay and added quick ACK check for faster completion
+                // Read ACK and Watch Version from watch
                 try {
-                    socket.inputStream.read() 
-                } catch (_: Exception) {}
+                    val reader = socket.inputStream.bufferedReader()
+                    val response = reader.readLine()
+                    if (response?.startsWith("VER|") == true) {
+                        val watchVersion = response.substringAfter("VER|").toIntOrNull() ?: -1
+                        if (watchVersion > 0) {
+                            context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
+                                .edit()
+                                .putInt("watch_version_code", watchVersion)
+                                .apply()
+                            Log.d(TAG, "Watch reported version: $watchVersion")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to read version ACK from watch: ${e.message}")
+                }
                 
                 true
             } catch (e: Exception) {

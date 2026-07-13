@@ -167,9 +167,10 @@ class FossBluetoothListenerService : Service() {
                     if (out.contains("\n")) break
                 }
                 
-                // Send immediate ACK to phone so it can close the connection faster
+                // Send immediate version code back to phone so it knows we are up to date
                 try {
-                    socket.outputStream.write(0x06) // ACK
+                    val version = com.steel101.wearsyncforbreezy.wear.BuildConfig.VERSION_CODE
+                    socket.outputStream.write("VER|$version\n".toByteArray(Charsets.UTF_8))
                     socket.outputStream.flush()
                 } catch (_: Exception) {}
 
