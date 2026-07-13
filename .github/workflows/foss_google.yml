@@ -23,15 +23,17 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      - name: Install Android Build Tools
+      - name: Extract Version Name from Gradle
+        id: get_version
         run: |
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;35.0.0" "platforms;android-35"
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;29.0.3"
+          # Works seamlessly for both Groovy (build.gradle) and Kotlin (build.gradle.kts)
+          VERSION_NAME=$(grep -m 1 "versionName" app/build.gradle* | tr -d '[:space:]' | cut -d'"' -f2 | cut -d"'" -f2)
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
 
       - name: Make Gradle Executable
         run: chmod +x ./gradlew
 
-      - name: Build and Sign Watch APKs First
+      - name: Build Watch APKs First
         run: ./gradlew :wear:assembleFossRelease :wear:assembleGooglePlayRelease
 
       - name: Sign Watch FOSS APK
@@ -87,8 +89,8 @@ jobs:
       - name: Create GitHub Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ github.ref_name == 'main' && 'FOSS & Google Play Release' || 'FOSS & Google Play Testing Release' }} v1.0.${{ github.run_number }}
-          tag_name: ${{ github.ref_name == 'main' && 'release' || 'testing' }}-build-${{ github.run_number }}-all
+          name: ${{ github.ref_name == 'main' && 'Release Build v' || 'Testing Build v' }}${{ steps.get_version.outputs.VERSION_NAME }}
+          tag_name: Release-Build-v${{ steps.get_version.outputs.VERSION_NAME }}
           target_commitish: ${{ github.ref_name }}
           draft: false
           prerelease: ${{ github.ref_name != 'main' }}
