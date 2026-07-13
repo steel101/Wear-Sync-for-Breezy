@@ -154,7 +154,6 @@ object AdbInstaller {
             val packageName = "com.steel101.wearsyncforbreezy"
             val activityName = "com.steel101.wearsyncforbreezy.MainActivity"
             manager.openStream("shell:am start -n $packageName/$activityName").use { stream ->
-                // Wait a bit for the command to execute
                 delay(500)
             }
             Result.success(Unit)
