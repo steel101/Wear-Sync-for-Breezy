@@ -7,8 +7,8 @@ jobs:
   build:
     name: Build & Sign APKs
     runs-on: ubuntu-latest
-    # This completely blocks the job if the manual run wasn't triggered from 'testing'
-    if: github.ref_name == 'testing'
+    # This ensures the job only runs if triggered from 'main' OR 'testing'
+    if: github.ref_name == 'main' || github.ref_name == 'testing'
     permissions:
       contents: write
 
@@ -87,11 +87,11 @@ jobs:
       - name: Create GitHub Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
         with:
-          name: FOSS & Google Play Testing Release v1.0.${{ github.run_number }}
-          tag_name: testing-build-${{ github.run_number }}-all
-          target_commitish: testing
+          name: ${{ github.ref_name == 'main' && 'FOSS & Google Play Release' || 'FOSS & Google Play Testing Release' }} v1.0.${{ github.run_number }}
+          tag_name: ${{ github.ref_name == 'main' && 'release' || 'testing' }}-build-${{ github.run_number }}-all
+          target_commitish: ${{ github.ref_name }}
           draft: false
-          prerelease: true
+          prerelease: ${{ github.ref_name != 'main' }}
           files: |
             ${{ steps.sign_phone_foss.outputs.signedReleaseFile }}
             ${{ steps.sign_phone_google.outputs.signedReleaseFile }}
