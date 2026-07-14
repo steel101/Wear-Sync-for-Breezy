@@ -35,14 +35,21 @@ jobs:
       - name: Make Gradle Executable
         run: chmod +x ./gradlew
 
+      # 1. Compile all variants simultaneously natively from source code
+      - name: Build All Variants
+        run: ./gradlew :wear:assembleFossRelease :wear:assembleGooglePlayRelease :app:assembleFossRelease :app:assembleGooglePlayRelease
 
-      # ==================== GOOGLE PLAY PIPELINE ====================
+      # 2. Sign Watch Apps
+      - name: Sign Watch FOSS APK
+        id: sign_watch_foss
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: wear/build/outputs/apk/foss/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      # 1. Build the Google Play Watch App
-      - name: Build Google Play Watch APK
-        run: ./gradlew :wear:assembleGooglePlayRelease
-
-      # 2. Sign the Google Play Watch APK right away
       - name: Sign Watch Google Play APK
         id: sign_watch_google
         uses: r0adkll/sign-android-release@v1
@@ -53,45 +60,7 @@ jobs:
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      # 3. Copy that explicitly SIGNED Google Play Watch App into Phone Assets
-      - name: Prepare Assets for Google Play Phone Build
-        run: |
-          mkdir -p app/src/googlePlay/assets
-          cp ${{ steps.sign_watch_google.outputs.signedReleaseFile }} app/src/googlePlay/assets/wear_companion.apk
-
-      # 4. Build the Google Play Phone App
-      - name: Build Google Play Phone APK
-        run: ./gradlew :app:assembleGooglePlayRelease
-
-      # 5. Sign the Google Play Phone App (Both match perfectly now)
-      - name: Sign Phone Google Play APK
-        id: sign_phone_google
-        uses: r0adkll/sign-android-release@v1
-        with:
-          releaseDirectory: app/build/outputs/apk/googlePlay/release
-          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-
-
-      # ==================== FOSS PIPELINE ====================
-
-      # 6. Build the FOSS Watch App
-      - name: Build FOSS Watch APK
-        run: ./gradlew :wear:assembleFossRelease
-
-      # 7. Embed the UNSIGNED FOSS Watch APK directly into the Phone Assets
-      - name: Prepare Assets for FOSS Phone Build
-        run: |
-          mkdir -p app/src/foss/assets
-          cp wear/build/outputs/apk/foss/release/wear-foss-release-unsigned.apk app/src/foss/assets/wear_companion.apk
-
-      # 8. Build the FOSS Phone App
-      - name: Build FOSS Phone APK
-        run: ./gradlew :app:assembleFossRelease
-
-      # 9. Sign ONLY the FOSS Phone App (FOSS Watch stays unsigned)
+      # 3. Sign Phone Apps
       - name: Sign Phone FOSS APK
         id: sign_phone_foss
         uses: r0adkll/sign-android-release@v1
@@ -102,15 +71,28 @@ jobs:
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
+      - name: Sign Phone Google Play APK
+        id: sign_phone_google
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/googlePlay/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      # ==================== PUBLIC RELEASE ASSETS ====================
-
-      # 10. Clean up public loose FOSS watch file name for easier visibility
-      - name: Prepare Public FOSS Watch Release Name
+      # 4. Clean up filenames for clean public display and to match your app's download URL
+      - name: Prepare Clean Public Release Names
         run: |
-          cp wear/build/outputs/apk/foss/release/wear-foss-release-unsigned.apk wear/build/outputs/apk/foss/release/Wear-FOSS-Release.apk
+          # Rename Phone APKs
+          cp app/build/outputs/apk/foss/release/app-foss-release-signed.apk app/build/outputs/apk/foss/release/floss-phone.apk
+          cp app/build/outputs/apk/googlePlay/release/app-googlePlay-release-signed.apk app/build/outputs/apk/googlePlay/release/google-phone.apk
+          
+          # Rename Watch APKs
+          cp wear/build/outputs/apk/foss/release/wear-foss-release-signed.apk wear/build/outputs/apk/foss/release/floss-watch.apk
+          cp wear/build/outputs/apk/googlePlay/release/wear-googlePlay-release-signed.apk wear/build/outputs/apk/googlePlay/release/google-watch.apk
 
-      # 11. Publish with clean semantic versions for IzzyOnDroid compatibility
+      # 5. Publish with clean semantic versions for IzzyOnDroid compatibility
       - name: Create GitHub Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
         with:
@@ -120,9 +102,9 @@ jobs:
           draft: false
           prerelease: ${{ github.ref_name != 'main' }}
           files: |
-            ${{ steps.sign_phone_foss.outputs.signedReleaseFile }}
-            ${{ steps.sign_phone_google.outputs.signedReleaseFile }}
-            wear/build/outputs/apk/foss/release/Wear-FOSS-Release.apk
-            ${{ steps.sign_watch_google.outputs.signedReleaseFile }}
+            app/build/outputs/apk/foss/release/floss-phone.apk
+            app/build/outputs/apk/googlePlay/release/google-phone.apk
+            wear/build/outputs/apk/foss/release/floss-watch.apk
+            wear/build/outputs/apk/googlePlay/release/google-watch.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
