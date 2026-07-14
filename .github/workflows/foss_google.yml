@@ -56,10 +56,9 @@ jobs:
 
       - name: Prepare Assets for Phone Build
         run: |
+          # Only prepare and copy assets for the Google Play flavor
           mkdir -p app/src/googlePlay/assets
-          cp ${{ steps.sign_watch_google.outputs.signedReleaseFile }} app/src/googlePlay/assets/wear_companion.apk
-          mkdir -p app/src/foss/assets
-          cp ${{ steps.sign_watch_foss.outputs.signedReleaseFile }} app/src/foss/assets/wear_companion.apk
+          cp "${{ steps.sign_watch_google.outputs.signedReleaseFile }}" app/src/googlePlay/assets/wear_companion.apk
 
       - name: Build Phone APKs
         run: ./gradlew :app:assembleFossRelease :app:assembleGooglePlayRelease
@@ -90,7 +89,7 @@ jobs:
           cp "${{ steps.sign_phone_foss.outputs.signedReleaseFile }}" output_apks/floss-phone.apk
           cp "${{ steps.sign_phone_google.outputs.signedReleaseFile }}" output_apks/google-phone.apk
           cp "${{ steps.sign_watch_foss.outputs.signedReleaseFile }}" output_apks/floss-watch.apk
-          cp "${{ secrets.sign_watch_google && steps.sign_watch_google.outputs.signedReleaseFile || steps.sign_watch_google.outputs.signedReleaseFile }}" output_apks/google-watch.apk
+          cp "${{ steps.sign_watch_google.outputs.signedReleaseFile }}" output_apks/google-watch.apk
 
       - name: Create GitHub Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
