@@ -19,12 +19,15 @@ jobs:
       - name: Extract Floss App Version Name
         id: get_version
         run: |
-          # Read the app's build.gradle file and isolate the versionName line
-          VERSION_LINE=$(grep "versionName" app/build.gradle | head -n 1)
-          # Strip out strings, spaces, equal signs, and quotes to get just the raw number string
-          VERSION_NAME=$(echo "$VERSION_LINE" | sed 's/.*versionName//' | tr -d '="[:space:]'\''')
+          # Use grep to find the file containing versionName, then use sed to strictly grab what is inside the quotes after 'versionName ='
+          VERSION_NAME=$(grep "versionName" app/build.gradle* | sed -E 's/.*versionName\s*=\s*"([^"]+)".*/\1/')
+          
+          # Safety fallback just in case the file reading fails
+          if [ -z "$VERSION_NAME" ] || [ "$VERSION_NAME" == "defaultConfig {" ]; then
+            VERSION_NAME="1.0.55-fallback"
+          fi
+          
           echo "Extracted App Version: $VERSION_NAME"
-          # Store it in the local step output context
           echo "version=$VERSION_NAME" >> $GITHUB_OUTPUT
 
       - name: Set up JDK 21
