@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         minSdk = 26
-        buildConfigField("int", "VERSION_CODE", "24")
+        buildConfigField("int", "VERSION_CODE", "25")
     }
 
     buildFeatures {

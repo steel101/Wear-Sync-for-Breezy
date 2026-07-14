@@ -346,15 +346,38 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
 
                 Text("Step 2: Install to Watch", fontWeight = FontWeight.Bold)
                 
+                var pushProgress by remember { mutableIntStateOf(0) }
                 Button(
                     onClick = {
                         isWorking = true
-                        performPushUpdate(context, scope, apkFile!!, { statusMessage = it }, { statusMessage = it }, viewModel, onComplete = { isWorking = false })
+                        pushProgress = 0
+                        performPushUpdate(
+                            context = context, 
+                            scope = scope, 
+                            apkFile = apkFile!!, 
+                            onStatusChange = { statusMessage = it }, 
+                            onProgress = { pushProgress = it }, 
+                            viewModel = viewModel, 
+                            onComplete = { isWorking = false }
+                        )
                     },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    enabled = apkFile != null && !isWorking
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(48.dp),
+                    enabled = apkFile != null && !isWorking,
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    Text("Push Update to Watch (Bluetooth)")
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        if (isWorking && pushProgress > 0) {
+                            LinearProgressIndicator(
+                                progress = { pushProgress / 100f },
+                                modifier = Modifier.fillMaxSize(),color = androidx.compose.ui.graphics.Color.Yellow,
+                                trackColor = androidx.compose.ui.graphics.Color.Transparent
+                            )
+                        }
+                        Text(
+                            text = if (isWorking && pushProgress > 0) "Sending: $pushProgress%" else "Push Update to Watch (Bluetooth)",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 OutlinedButton(
@@ -926,6 +949,7 @@ fun FlavorSettings(viewModel: WeatherSyncViewModel) {
         }
 
         var isPushing by remember { mutableStateOf(false) }
+        var pushProgress by remember { mutableIntStateOf(0) }
 
         Button(
             onClick = {
@@ -933,13 +957,41 @@ fun FlavorSettings(viewModel: WeatherSyncViewModel) {
                     showConfirmDialog = true
                 } else {
                     isPushing = true
-                    performPushUpdate(context, scope, apkFile, { installStatus = it }, { installStatus = it }, viewModel, onComplete = { isPushing = false })
+                    pushProgress = 0
+                    performPushUpdate(
+                        context = context, 
+                        scope = scope, 
+                        apkFile = apkFile, 
+                        onStatusChange = { installStatus = it }, 
+                        onProgress = { pushProgress = it }, 
+                        viewModel = viewModel, 
+                        onComplete = { isPushing = false }
+                    )
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = hasApk && !isPushing
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            enabled = hasApk && !isPushing,
+            contentPadding = PaddingValues(0.dp)
         ) {
-            Text(if (isUpToDate) "Watch App is Up to Date" else "Push Update to Watch (BT)")
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                if (isPushing && pushProgress > 0) {
+                    LinearProgressIndicator(
+                        progress = { pushProgress / 100f },
+                        modifier = Modifier.fillMaxSize(),
+                        color = androidx.compose.ui.graphics.Color.Yellow,
+                        trackColor = androidx.compose.ui.graphics.Color.Transparent
+                    )
+                }
+                Text(
+                    text = when {
+                        isPushing && pushProgress > 0 -> "Sending: $pushProgress%"
+                        isPushing -> "Starting..."
+                        isUpToDate -> "Watch App is Up to Date"
+                        else -> "Push Update to Watch (BT)"
+                    },
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         if (showConfirmDialog) {
@@ -951,7 +1003,16 @@ fun FlavorSettings(viewModel: WeatherSyncViewModel) {
                     TextButton(onClick = {
                         showConfirmDialog = false
                         isPushing = true
-                        performPushUpdate(context, scope, apkFile, { installStatus = it }, { installStatus = it }, viewModel, onComplete = { isPushing = false })
+                        pushProgress = 0
+                        performPushUpdate(
+                            context = context, 
+                            scope = scope, 
+                            apkFile = apkFile, 
+                            onStatusChange = { installStatus = it }, 
+                            onProgress = { pushProgress = it }, 
+                            viewModel = viewModel, 
+                            onComplete = { isPushing = false }
+                        )
                     }) {
                         Text("Push Anyway")
                     }
@@ -974,7 +1035,7 @@ fun FlavorSettings(viewModel: WeatherSyncViewModel) {
             onClick = { showInstructions = true },
             modifier = Modifier.align(Alignment.CenterHorizontally)
         ) {
-            Text("Show Sideload Instructions")
+            Text("Sideload Watch App")
         }
 
         if (showInstructions) {
@@ -1023,7 +1084,7 @@ private fun performPushUpdate(
     scope: CoroutineScope,
     apkFile: File,
     onStatusChange: (String) -> Unit,
-    onProgress: (String) -> Unit,
+    onProgress: (Int) -> Unit,
     viewModel: WeatherSyncViewModel? = null,
     onComplete: (() -> Unit)? = null
 ) {
@@ -1045,7 +1106,7 @@ private fun performPushUpdate(
             onStatusChange("Sending via Bluetooth...")
             Log.d("FlavorExtras", "Calling sendApkToWatch")
             val success = FossBluetoothSyncManager.sendApkToWatch(context, apkFile) { progress ->
-                onProgress("Sending: $progress%")
+                onProgress(progress)
             }
             if (success) {
                 onStatusChange("Update sent! Check watch.")

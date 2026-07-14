@@ -121,8 +121,6 @@ fun WeatherSyncScreen(
     val watchVersionCode by viewModel.watchVersionCode.collectAsState()
 
     LaunchedEffect(watchVersionCode) {
-        // Only trigger forced setup if the watch version is known (>= 0) and outdated.
-        // Uninitialized state (-1) is ignored to prevent the popup showing on every launch.
         if (watchVersionCode != -1 && checkIfSetupRequired(context, watchVersionCode)) {
             firstLaunch = true
         }
@@ -135,7 +133,6 @@ fun WeatherSyncScreen(
                 firstLaunch = false
                 prefs.edit().putBoolean("first_launch_setup", false).apply()
             }
-            // Record current flavor after setup or transition is acknowledged
             prefs.edit().putString("last_store_flavor", currentFlavor).apply()
         },
         viewModel = viewModel
