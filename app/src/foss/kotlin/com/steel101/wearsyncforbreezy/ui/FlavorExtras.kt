@@ -38,6 +38,7 @@ import androidx.lifecycle.viewModelScope
 import com.steel101.wearsyncforbreezy.AdbNetworkScanner
 import com.steel101.wearsyncforbreezy.sync.AdbInstaller
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
 import java.io.FileOutputStream
@@ -121,7 +122,9 @@ object CompanionApkManager {
     }
 }
 
-suspend fun checkIfSetupRequired(context: Context): Boolean = withContext(Dispatchers.IO) {
+suspend fun checkIfSetupRequired(context: Context, watchVersionCode: Int): Boolean = withContext(Dispatchers.IO) {
+    if (watchVersionCode < BuildConfig.VERSION_CODE) return@withContext true
+    
     val apkFile = CompanionApkManager.getCachedApk(context)
     if (!apkFile.exists()) return@withContext true
     val apkVersion = AdbInstaller.getApkVersion(context, apkFile)
@@ -244,18 +247,20 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
         )
     }
 
+    val watchVersionCode by (viewModel?.watchVersionCode ?: remember { MutableStateFlow(-1) }).collectAsState()
+
     AlertDialog(
         onDismissRequest = { 
-            val isUpToDate = apkVersion >= BuildConfig.VERSION_CODE
-            if (isUpToDate && !isWorking) onDismiss() 
+            val isWatchUpToDate = watchVersionCode >= BuildConfig.VERSION_CODE
+            if (isWatchUpToDate && !isWorking) onDismiss() 
         },
         title = { Text("Required: Watch App Setup") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                val isUpToDate = apkVersion >= BuildConfig.VERSION_CODE
-                if (!isUpToDate) {
+                val isWatchUpToDate = watchVersionCode >= BuildConfig.VERSION_CODE
+                if (!isWatchUpToDate) {
                     Text(
-                        "A new version of the watch app is required to continue. Please download and install it to use weather sync.",
+                        "A new version of the watch app is required on your watch to continue. Please download and install it.",
                         color = MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.Bold
                     )
@@ -371,8 +376,8 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
             }
         },
         confirmButton = {
-            val isUpToDate = apkVersion >= BuildConfig.VERSION_CODE
-            if (isUpToDate) {
+            val isWatchUpToDate = watchVersionCode >= BuildConfig.VERSION_CODE
+            if (isWatchUpToDate) {
                 TextButton(onClick = onDismiss, enabled = !isWorking) {
                     Text("Close")
                 }
@@ -761,6 +766,7 @@ fun AdbWizardDialog(apkFile: File, onDismiss: () -> Unit, onComplete: () -> Unit
                                         
                                         if (launchResult.isSuccess) {
                                             status = "Installation complete! Enjoy."
+                                            viewModel?.updateWatchVersion(context, BuildConfig.VERSION_CODE)
                                             delay(1000)
                                             onComplete()
                                             viewModel?.fetchAndSync(context)
@@ -1028,7 +1034,7 @@ private fun performPushUpdate(
             }
             if (success) {
                 onStatusChange("Update sent! Check watch.")
-                viewModel?.updateWatchVersion(BuildConfig.VERSION_CODE)
+                viewModel?.updateWatchVersion(context, BuildConfig.VERSION_CODE)
             } else {
                 onStatusChange("Failed. Ensure Watch app is open and paired.")
             }

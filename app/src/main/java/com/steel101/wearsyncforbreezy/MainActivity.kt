@@ -118,8 +118,10 @@ fun WeatherSyncScreen(
         mutableStateOf(prefs.getBoolean("first_launch_setup", true) || flavorChangedToFoss) 
     }
 
-    LaunchedEffect(Unit) {
-        if (checkIfSetupRequired(context)) {
+    val watchVersionCode by viewModel.watchVersionCode.collectAsState()
+
+    LaunchedEffect(watchVersionCode) {
+        if (checkIfSetupRequired(context, watchVersionCode)) {
             firstLaunch = true
         }
     }

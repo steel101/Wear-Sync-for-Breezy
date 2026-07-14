@@ -42,7 +42,7 @@ fun SetupInstructions(showLoading: Boolean = true, onDismiss: () -> Unit, viewMo
     }
 }
 
-suspend fun checkIfSetupRequired(context: Context): Boolean {
+suspend fun checkIfSetupRequired(context: Context, watchVersionCode: Int): Boolean {
     return false
 }
 
@@ -521,6 +521,7 @@ fun AdbWizardDialog(onDismiss: () -> Unit, onComplete: () -> Unit = {}, viewMode
                                         
                                         if (launchResult.isSuccess) {
                                             status = "Installation complete! Enjoy."
+                                            viewModel?.updateWatchVersion(context, BuildConfig.VERSION_CODE)
                                             delay(1000)
                                             onComplete()
                                             viewModel?.fetchAndSync(context)

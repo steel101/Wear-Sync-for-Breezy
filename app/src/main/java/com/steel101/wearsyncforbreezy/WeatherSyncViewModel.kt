@@ -54,8 +54,12 @@ class WeatherSyncViewModel : ViewModel() {
     private val _watchVersionCode = MutableStateFlow(-1)
     val watchVersionCode: StateFlow<Int> = _watchVersionCode
 
-    fun updateWatchVersion(version: Int) {
+    fun updateWatchVersion(context: Context, version: Int) {
         _watchVersionCode.value = version
+        val watchPrefs = context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
+        watchPrefs.edit {
+            putInt("watch_version_code", version)
+        }
     }
 
     fun updateWatchStatus(context: Context) {
