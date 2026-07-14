@@ -121,7 +121,9 @@ fun WeatherSyncScreen(
     val watchVersionCode by viewModel.watchVersionCode.collectAsState()
 
     LaunchedEffect(watchVersionCode) {
-        if (checkIfSetupRequired(context, watchVersionCode)) {
+        // Only trigger forced setup if the watch version is known (>= 0) and outdated.
+        // Uninitialized state (-1) is ignored to prevent the popup showing on every launch.
+        if (watchVersionCode != -1 && checkIfSetupRequired(context, watchVersionCode)) {
             firstLaunch = true
         }
     }

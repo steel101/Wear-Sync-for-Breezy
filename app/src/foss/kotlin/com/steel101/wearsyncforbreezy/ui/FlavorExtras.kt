@@ -123,12 +123,10 @@ object CompanionApkManager {
 }
 
 suspend fun checkIfSetupRequired(context: Context, watchVersionCode: Int): Boolean = withContext(Dispatchers.IO) {
-    if (watchVersionCode < BuildConfig.VERSION_CODE) return@withContext true
-    
-    val apkFile = CompanionApkManager.getCachedApk(context)
-    if (!apkFile.exists()) return@withContext true
-    val apkVersion = AdbInstaller.getApkVersion(context, apkFile)
-    return@withContext apkVersion < BuildConfig.VERSION_CODE
+    // Only force setup if we KNOW the watch app is out of date.
+    // If watchVersionCode is -1, we haven't synced yet, so we don't force it 
+    // unless first_launch_setup is true (handled in MainActivity).
+    return@withContext watchVersionCode in 0 until BuildConfig.VERSION_CODE
 }
 
 @Composable
@@ -347,12 +345,24 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text("Step 2: Install to Watch", fontWeight = FontWeight.Bold)
+                
                 Button(
+                    onClick = {
+                        isWorking = true
+                        performPushUpdate(context, scope, apkFile!!, { statusMessage = it }, { statusMessage = it }, viewModel, onComplete = { isWorking = false })
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    enabled = apkFile != null && !isWorking
+                ) {
+                    Text("Push Update to Watch (Bluetooth)")
+                }
+
+                OutlinedButton(
                     onClick = { showAdbWizard = true },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     enabled = apkFile != null && !isWorking
                 ) {
-                    Text("Start ADB Installer")
+                    Text("Install via Wireless ADB")
                 }
                 
                 TextButton(
@@ -915,16 +925,19 @@ fun FlavorSettings(viewModel: WeatherSyncViewModel) {
             }
         }
 
+        var isPushing by remember { mutableStateOf(false) }
+
         Button(
             onClick = {
                 if (isUpToDate) {
                     showConfirmDialog = true
                 } else {
-                    performPushUpdate(context, scope, apkFile, { installStatus = it }, { installStatus = it }, viewModel)
+                    isPushing = true
+                    performPushUpdate(context, scope, apkFile, { installStatus = it }, { installStatus = it }, viewModel, onComplete = { isPushing = false })
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = hasApk && (installStatus.isEmpty() || !installStatus.contains("..."))
+            enabled = hasApk && !isPushing
         ) {
             Text(if (isUpToDate) "Watch App is Up to Date" else "Push Update to Watch (BT)")
         }
@@ -937,7 +950,8 @@ fun FlavorSettings(viewModel: WeatherSyncViewModel) {
                 confirmButton = {
                     TextButton(onClick = {
                         showConfirmDialog = false
-                        performPushUpdate(context, scope, apkFile, { installStatus = it }, { installStatus = it }, viewModel)
+                        isPushing = true
+                        performPushUpdate(context, scope, apkFile, { installStatus = it }, { installStatus = it }, viewModel, onComplete = { isPushing = false })
                     }) {
                         Text("Push Anyway")
                     }
@@ -1010,16 +1024,17 @@ private fun performPushUpdate(
     apkFile: File,
     onStatusChange: (String) -> Unit,
     onProgress: (String) -> Unit,
-    viewModel: WeatherSyncViewModel? = null
+    viewModel: WeatherSyncViewModel? = null,
+    onComplete: (() -> Unit)? = null
 ) {
     scope.launch {
         Log.d("FlavorExtras", "Push Update started")
-        if (!apkFile.exists()) {
-            onStatusChange("Error: APK file missing")
-            return@launch
-        }
-        
         try {
+            if (!apkFile.exists()) {
+                onStatusChange("Error: APK file missing")
+                return@launch
+            }
+            
             onStatusChange("Checking Bluetooth...")
             val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager
             if (bluetoothManager.adapter?.isEnabled != true) {
@@ -1041,6 +1056,8 @@ private fun performPushUpdate(
         } catch (e: Exception) {
             Log.e("FlavorExtras", "Update failed", e)
             onStatusChange("Error: ${e.message}")
+        } finally {
+            onComplete?.invoke()
         }
     }
 }
