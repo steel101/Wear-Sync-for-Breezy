@@ -106,7 +106,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           # This sets the clean, human-readable headline on the release page
-          name: ${{ github.ref_name == 'main' && 'FOSS & Google Play Release' || 'FOSS & Google Play Testing Release' }} v${{ steps.get_version.outputs.version }}
+          name: ${{ github.ref_name == 'main' && 'Release Build' || 'FOSS & Google Play Testing Release' }} v${{ steps.get_version.outputs.version }}
           # This forces the tag name to exactly match your desired "Release Build v1.0.xx" format using Git-safe hyphens
           tag_name: ${{ github.ref_name == 'main' && 'Release-Build' || 'Testing-Build' }}-v${{ steps.get_version.outputs.version }}
           target_commitish: ${{ github.ref_name }}
