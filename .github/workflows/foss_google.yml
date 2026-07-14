@@ -7,6 +7,7 @@ jobs:
   build:
     name: Build & Sign APKs
     runs-on: ubuntu-latest
+    # This ensures the job only runs if triggered from 'main' OR 'testing'
     if: github.ref_name == 'main' || github.ref_name == 'testing'
     permissions:
       contents: write
@@ -22,24 +23,17 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      - name: Install Required Build Tools for Signing
+      - name: Install Android Build Tools
         run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;35.0.0" "platforms;android-35"
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;29.0.3"
-
-      - name: Extract Version Name from Gradle
-        id: get_version
-        run: |
-          VERSION_NAME=$(grep -m 1 "versionName" app/build.gradle* | tr -d '[:space:]' | cut -d'"' -f2 | cut -d"'" -f2)
-          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
 
       - name: Make Gradle Executable
         run: chmod +x ./gradlew
 
-      # 1. Compile all variants simultaneously natively from source code
-      - name: Build All Variants
-        run: ./gradlew :wear:assembleFossRelease :wear:assembleGooglePlayRelease :app:assembleFossRelease :app:assembleGooglePlayRelease
+      - name: Build and Sign Watch APKs First
+        run: ./gradlew :wear:assembleFossRelease :wear:assembleGooglePlayRelease
 
-      # 2. Sign Watch Apps
       - name: Sign Watch FOSS APK
         id: sign_watch_foss
         uses: r0adkll/sign-android-release@v1
@@ -60,7 +54,16 @@ jobs:
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      # 3. Sign Phone Apps
+      - name: Prepare Assets for Phone Build
+        run: |
+          mkdir -p app/src/googlePlay/assets
+          cp ${{ steps.sign_watch_google.outputs.signedReleaseFile }} app/src/googlePlay/assets/wear_companion.apk
+          mkdir -p app/src/foss/assets
+          cp ${{ steps.sign_watch_foss.outputs.signedReleaseFile }} app/src/foss/assets/wear_companion.apk
+
+      - name: Build Phone APKs
+        run: ./gradlew :app:assembleFossRelease :app:assembleGooglePlayRelease
+
       - name: Sign Phone FOSS APK
         id: sign_phone_foss
         uses: r0adkll/sign-android-release@v1
@@ -81,30 +84,26 @@ jobs:
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      # 4. Clean up filenames for clean public display and to match your app's download URL
-      - name: Prepare Clean Public Release Names
+      - name: Rename and Organize Artifacts
         run: |
-          # Rename Phone APKs
-          cp app/build/outputs/apk/foss/release/app-foss-release-signed.apk app/build/outputs/apk/foss/release/floss-phone.apk
-          cp app/build/outputs/apk/googlePlay/release/app-googlePlay-release-signed.apk app/build/outputs/apk/googlePlay/release/google-phone.apk
-          
-          # Rename Watch APKs
-          cp wear/build/outputs/apk/foss/release/wear-foss-release-signed.apk wear/build/outputs/apk/foss/release/floss-watch.apk
-          cp wear/build/outputs/apk/googlePlay/release/wear-googlePlay-release-signed.apk wear/build/outputs/apk/googlePlay/release/google-watch.apk
+          mkdir -p output_apks
+          cp "${{ steps.sign_phone_foss.outputs.signedReleaseFile }}" output_apks/floss-phone.apk
+          cp "${{ steps.sign_phone_google.outputs.signedReleaseFile }}" output_apks/google-phone.apk
+          cp "${{ steps.sign_watch_foss.outputs.signedReleaseFile }}" output_apks/floss-watch.apk
+          cp "${{ secrets.sign_watch_google && steps.sign_watch_google.outputs.signedReleaseFile || steps.sign_watch_google.outputs.signedReleaseFile }}" output_apks/google-watch.apk
 
-      # 5. Publish with clean semantic versions for IzzyOnDroid compatibility
       - name: Create GitHub Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ github.ref_name == 'main' && 'Release ' || 'Testing Release ' }}v${{ steps.get_version.outputs.VERSION_NAME }}
-          tag_name: v${{ steps.get_version.outputs.VERSION_NAME }}
+          name: ${{ github.ref_name == 'main' && 'FOSS & Google Play Release' || 'FOSS & Google Play Testing Release' }} v1.0.${{ github.run_number }}
+          tag_name: ${{ github.ref_name == 'main' && 'release' || 'testing' }}-build-${{ github.run_number }}-all
           target_commitish: ${{ github.ref_name }}
           draft: false
           prerelease: ${{ github.ref_name != 'main' }}
           files: |
-            app/build/outputs/apk/foss/release/floss-phone.apk
-            app/build/outputs/apk/googlePlay/release/google-phone.apk
-            wear/build/outputs/apk/foss/release/floss-watch.apk
-            wear/build/outputs/apk/googlePlay/release/google-watch.apk
+            output_apks/floss-phone.apk
+            output_apks/google-phone.apk
+            output_apks/floss-watch.apk
+            output_apks/google-watch.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
