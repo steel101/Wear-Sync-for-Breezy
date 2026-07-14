@@ -6,6 +6,9 @@ import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +28,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.viewModelScope
 import com.steel101.wearsyncforbreezy.AdbNetworkScanner
 import com.steel101.wearsyncforbreezy.sync.AdbInstaller
+import com.steel101.wearsyncforbreezy.BuildConfig
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
@@ -38,6 +42,10 @@ fun SetupInstructions(showLoading: Boolean = true, onDismiss: () -> Unit, viewMo
     }
 }
 
+suspend fun checkIfSetupRequired(context: Context): Boolean {
+    return false
+}
+
 @Composable
 fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewModel? = null) {
     val context = LocalContext.current
@@ -45,6 +53,17 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
     var showAdbWizard by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("") }
     var isWorking by remember { mutableStateOf(false) }
+    var apkVersion by remember { mutableIntStateOf(0) }
+    
+    val apkFile = remember {
+        val file = File(context.cacheDir, "wear_adb_install.apk")
+        if (!file.exists()) {
+            try {
+                context.assets.open("wear_companion.apk").use { it.copyTo(file.outputStream()) }
+            } catch (e: Exception) { Log.e("FlavorExtras", "Failed to extract asset", e) }
+        }
+        file
+    }
 
     if (showAdbWizard) {
         AdbWizardDialog(
@@ -66,6 +85,7 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text("Step 1: ADB Installation", fontWeight = FontWeight.Bold)
+                
                 Text("Install the companion app automatically using Wireless ADB.")
                 Button(
                     onClick = { showAdbWizard = true },
@@ -483,7 +503,9 @@ fun AdbWizardDialog(onDismiss: () -> Unit, onComplete: () -> Unit = {}, viewMode
                                 try {
                                     val apkFile = withContext(Dispatchers.IO) {
                                         val file = File(context.cacheDir, "wear_adb_install.apk")
-                                        context.assets.open("wear_companion.apk").use { it.copyTo(file.outputStream()) }
+                                        if (!file.exists()) {
+                                            context.assets.open("wear_companion.apk").use { it.copyTo(file.outputStream()) }
+                                        }
                                         file
                                     }
                                     val result = AdbInstaller.installToWatch(
@@ -491,19 +513,20 @@ fun AdbWizardDialog(onDismiss: () -> Unit, onComplete: () -> Unit = {}, viewMode
                                     )
                                     if (result.isSuccess) {
                                         status = "Installation successful!"
-                                        delay(800)
-                                        onComplete()
-
-                                        viewModel?.let { vm ->
-                                            vm.viewModelScope.launch {
-                                                delay(2000)
-                                                Log.d("FlavorExtras", "Opening watch app...")
-                                                AdbInstaller.openWatchApp(context, ipAddress, connectPort.toIntOrNull() ?: 5555)
-                                                
-                                                delay(5000)
-                                                Log.d("FlavorExtras", "Syncing weather...")
-                                                vm.fetchAndSync(context)
-                                            }
+                                        
+                                        delay(5000) 
+                                        
+                                        status = "Opening watch app..."
+                                        val launchResult = AdbInstaller.openWatchApp(context, ipAddress, connectPort.toIntOrNull() ?: 5555)
+                                        
+                                        if (launchResult.isSuccess) {
+                                            status = "Installation complete! Enjoy."
+                                            delay(1000)
+                                            onComplete()
+                                            viewModel?.fetchAndSync(context)
+                                        } else {
+                                            status = "Installed, but failed to auto-open. Please open manually."
+                                            isWorking = false
                                         }
                                     } else {
                                         status = "Error: ${result.exceptionOrNull()?.message}"
@@ -579,7 +602,7 @@ private fun saveApkToDownloads(context: Context) {
             val contentValues = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                 put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/vnd.android.package-archive")
-                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                put("relative_path", android.os.Environment.DIRECTORY_DOWNLOADS)
             }
             
             val resolver = context.contentResolver

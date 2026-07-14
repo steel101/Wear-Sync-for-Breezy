@@ -121,6 +121,13 @@ object CompanionApkManager {
     }
 }
 
+suspend fun checkIfSetupRequired(context: Context): Boolean = withContext(Dispatchers.IO) {
+    val apkFile = CompanionApkManager.getCachedApk(context)
+    if (!apkFile.exists()) return@withContext true
+    val apkVersion = AdbInstaller.getApkVersion(context, apkFile)
+    return@withContext apkVersion < BuildConfig.VERSION_CODE
+}
+
 @Composable
 fun DownloadWarningDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
@@ -168,6 +175,22 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
     var statusMessage by remember { mutableStateOf("") }
     var isWorking by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableIntStateOf(0) }
+    var apkVersion by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(apkFile) {
+        apkFile?.let {
+            val version = AdbInstaller.getApkVersion(context, it)
+            if (version > 0 && version < BuildConfig.VERSION_CODE) {
+                Log.d("FlavorExtras", "Auto-clearing outdated APK (v$version < v${BuildConfig.VERSION_CODE})")
+                it.delete()
+                apkFile = null
+                apkVersion = 0
+                statusMessage = "Outdated companion APK cleared. Please download the latest version."
+            } else {
+                apkVersion = version
+            }
+        }
+    }
 
     val startDownload = {
         showDownloadWarning = false
@@ -222,10 +245,23 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
     }
 
     AlertDialog(
-        onDismissRequest = { if (!isWorking) onDismiss() },
-        title = { Text("Watch App Setup") },
+        onDismissRequest = { 
+            val isUpToDate = apkVersion >= BuildConfig.VERSION_CODE
+            if (isUpToDate && !isWorking) onDismiss() 
+        },
+        title = { Text("Required: Watch App Setup") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                val isUpToDate = apkVersion >= BuildConfig.VERSION_CODE
+                if (!isUpToDate) {
+                    Text(
+                        "A new version of the watch app is required to continue. Please download and install it to use weather sync.",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                
                 Text("To sync weather, you must sideload the companion app on your watch.")
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -258,32 +294,40 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
                         }
                     }
                 } else {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
+                    val isOld = apkVersion > 0 && apkVersion < BuildConfig.VERSION_CODE
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isOld) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = "Ready",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "APK is ready for installation",
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        TextButton(
-                            onClick = { 
-                                apkFile = null
-                                CompanionApkManager.getCachedApk(context).delete() 
-                            },
-                            contentPadding = PaddingValues(horizontal = 12.dp)
-                        ) {
-                            Text("Clear")
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    if (isOld) Icons.Default.Warning else Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = if (isOld) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isOld) "Companion APK is outdated!" else "APK is ready for installation",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isOld) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            if (isOld) {
+                                Text(
+                                    "Your APK (v$apkVersion) is older than this app (v${BuildConfig.VERSION_CODE}). Please download a fresh version for full compatibility.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { apkFile = null; CompanionApkManager.getCachedApk(context).delete() }) {
+                                    Text("Clear & Redownload")
+                                }
+                            }
                         }
                     }
                 }
@@ -327,8 +371,11 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss, enabled = !isWorking) {
-                Text("Close")
+            val isUpToDate = apkVersion >= BuildConfig.VERSION_CODE
+            if (isUpToDate) {
+                TextButton(onClick = onDismiss, enabled = !isWorking) {
+                    Text("Close")
+                }
             }
         }
     )
@@ -706,19 +753,20 @@ fun AdbWizardDialog(apkFile: File, onDismiss: () -> Unit, onComplete: () -> Unit
                                     )
                                     if (result.isSuccess) {
                                         status = "Installation successful!"
-                                        delay(800)
-                                        onComplete()
-
-                                        viewModel?.let { vm ->
-                                            vm.viewModelScope.launch {
-                                                delay(2000)
-                                                Log.d("FlavorExtras", "Opening watch app...")
-                                                AdbInstaller.openWatchApp(context, ipAddress, connectPort.toIntOrNull() ?: 5555)
-                                                
-                                                delay(5000)
-                                                Log.d("FlavorExtras", "Syncing weather...")
-                                                vm.fetchAndSync(context)
-                                            }
+                                        
+                                        delay(5000) // Give the watch system 5 seconds to fully register the new install
+                                        
+                                        status = "Opening watch app..."
+                                        val launchResult = AdbInstaller.openWatchApp(context, ipAddress, connectPort.toIntOrNull() ?: 5555)
+                                        
+                                        if (launchResult.isSuccess) {
+                                            status = "Installation complete! Enjoy."
+                                            delay(1000)
+                                            onComplete()
+                                            viewModel?.fetchAndSync(context)
+                                        } else {
+                                            status = "Installed, but failed to auto-open. Please open manually."
+                                            isWorking = false
                                         }
                                     } else {
                                         status = "Error: ${result.exceptionOrNull()?.message}"
@@ -998,7 +1046,7 @@ private fun saveApkToDownloads(context: Context, apkFile: File) {
             val contentValues = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                 put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/vnd.android.package-archive")
-                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                put("relative_path", android.os.Environment.DIRECTORY_DOWNLOADS)
             }
             
             val resolver = context.contentResolver

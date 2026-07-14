@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.steel101.wearsyncforbreezy.sync.WeatherSyncWorker
 import com.steel101.wearsyncforbreezy.ui.FlavorSettings
 import com.steel101.wearsyncforbreezy.ui.SetupInstructions
+import com.steel101.wearsyncforbreezy.ui.checkIfSetupRequired
 import com.steel101.wearsyncforbreezy.ui.startSyncService
 import com.steel101.wearsyncforbreezy.ui.theme.BreezyWeatherWearOsSyncTheme
 import org.breezyweather.datasharing.BreezyLocation
@@ -115,6 +116,12 @@ fun WeatherSyncScreen(
     
     var firstLaunch by remember { 
         mutableStateOf(prefs.getBoolean("first_launch_setup", true) || flavorChangedToFoss) 
+    }
+
+    LaunchedEffect(Unit) {
+        if (checkIfSetupRequired(context)) {
+            firstLaunch = true
+        }
     }
 
     SetupInstructions(

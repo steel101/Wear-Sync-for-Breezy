@@ -195,9 +195,8 @@ object AdbInstaller {
             val packageName = "com.steel101.wearsyncforbreezy"
             val activityName = "com.steel101.wearsyncforbreezy.MainActivity"
             
-            // Use -W for wait and -S to force stop first
-            manager.openStream("shell:am start -W -S -n $packageName/$activityName").use { stream ->
-                delay(1000)
+            manager.openStream("shell:am start -W -n $packageName/$activityName").use { stream ->
+                delay(4000)
             }
             Result.success(Unit)
         } catch (e: Exception) {
@@ -217,6 +216,21 @@ object AdbInstaller {
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    suspend fun getApkVersion(context: Context, apkFile: File): Int = withContext(Dispatchers.IO) {
+        try {
+            val packageManager = context.packageManager
+            val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                packageManager.getPackageArchiveInfo(apkFile.absolutePath, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
+            }
+            info?.versionCode ?: 0
+        } catch (e: Exception) {
+            0
         }
     }
 }
