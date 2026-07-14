@@ -43,8 +43,7 @@ object AdbInstaller {
                 Log.d("AdbInstaller", "Already connected to $ip:$port, reusing session")
                 return true
             }
-            
-            // If connected to something else, close it first
+
             if (isAdbConnected) {
                 try { disconnect() } catch (e: Exception) {}
             }
@@ -144,7 +143,6 @@ object AdbInstaller {
         try {
             Log.d(TAG, "Pairing with $ip:$port using code $pairingCode...")
             val manager = getOrCreateManager(context)
-            // Always disconnect before pairing to ensure a clean state
             manager.disconnect()
             if (manager.pair(ip, port, pairingCode)) {
                 Result.success("Pairing successful!")
@@ -169,7 +167,7 @@ object AdbInstaller {
             Log.d(TAG, "Installing ${apkFile.name}...")
             
             val size = apkFile.length()
-            manager.openStream("exec:pm install -S $size").use { stream ->
+            manager.openStream("exec:pm install -r -g -S $size").use { stream ->
                 apkFile.inputStream().use { input ->
                     stream.openOutputStream().use { output ->
                         val buffer = ByteArray(1024 * 64)
@@ -196,8 +194,10 @@ object AdbInstaller {
             }
             val packageName = "com.steel101.wearsyncforbreezy"
             val activityName = "com.steel101.wearsyncforbreezy.MainActivity"
-            manager.openStream("shell:am start -n $packageName/$activityName").use { stream ->
-                delay(500)
+            
+            // Use -W for wait and -S to force stop first
+            manager.openStream("shell:am start -W -S -n $packageName/$activityName").use { stream ->
+                delay(1000)
             }
             Result.success(Unit)
         } catch (e: Exception) {
@@ -210,7 +210,6 @@ object AdbInstaller {
         try {
             val manager = getOrCreateManager(context)
             if (manager.connectRobustly(ip, port)) {
-                // Keep the connection open for the next step
                 delay(500)
                 Result.success(Unit)
             } else {
