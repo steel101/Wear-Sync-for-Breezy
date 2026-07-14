@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.Log
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
 import com.steel101.wearsyncforbreezy.*
+import com.steel101.wearsyncforbreezy.wear.BuildConfig
 import org.json.JSONObject
 
 object SyncDataProcessor {
@@ -46,7 +47,7 @@ object SyncDataProcessor {
         
         // Report watch version back to phone
         // Since we are in the :wear module, we use the wear-specific BuildConfig or the shared one
-        val watchVersion = com.steel101.wearsyncforbreezy.wear.BuildConfig.VERSION_CODE
+        val watchVersion = BuildConfig.VERSION_CODE
         prefs.edit().putInt("watch_version_code", watchVersion).apply()
 
         triggerUpdates(context)

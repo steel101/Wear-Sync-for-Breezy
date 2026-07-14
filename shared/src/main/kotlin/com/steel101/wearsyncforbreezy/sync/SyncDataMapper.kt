@@ -1,6 +1,7 @@
 package com.steel101.wearsyncforbreezy.sync
 
 import com.steel101.wearsyncforbreezy.WeatherUtils
+import com.steel101.wearsyncforbreezy.shared.BuildConfig
 import org.breezyweather.datasharing.BreezyLocation
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -36,7 +37,7 @@ object SyncDataMapper {
         val humidity = current?.relativeHumidity?.value
         data["${prefix}humidity"] = humidity?.let { "${it.toInt()}%" } ?: "--"
 
-        data["phone_version_code"] = com.steel101.wearsyncforbreezy.shared.BuildConfig.VERSION_CODE
+        data["phone_version_code"] = BuildConfig.VERSION_CODE
 
         val uv = current?.uV?.value
         data["${prefix}uv"] = uv?.let { String.format(Locale.US, "%.1f", it) } ?: "--"

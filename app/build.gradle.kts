@@ -12,32 +12,6 @@ val localProperties = Properties().apply {
     }
 }
 
-val copyGooglePlayWearApk = tasks.register<Copy>("copyGooglePlayWearApk") {
-    val wearProject = project(":wear")
-    dependsOn("${wearProject.path}:packageGooglePlayRelease")
-
-    from(wearProject.layout.buildDirectory.dir("outputs/apk/googlePlay/release"))
-
-    include("*.apk")
-    exclude("*unsigned*")
-    into(layout.projectDirectory.dir("src/googlePlay/assets"))
-    rename { "wear_companion.apk" }
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
-
-val copyFossWearApk = tasks.register<Copy>("copyFossWearApk") {
-    val wearProject = project(":wear")
-    dependsOn("${wearProject.path}:packageFossRelease")
-
-    from(wearProject.layout.buildDirectory.dir("outputs/apk/foss/release"))
-
-    include("*.apk")
-    exclude("*unsigned*")
-    into(layout.projectDirectory.dir("src/foss/assets"))
-    rename { "wear_companion.apk" }
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
-
 android {
     namespace = "com.steel101.wearsyncforbreezy"
     compileSdk = 37
@@ -130,28 +104,6 @@ android {
         buildConfig = true
     }
 
-    project.afterEvaluate {
-        tasks.named("mergeGooglePlayReleaseAssets") { dependsOn(copyGooglePlayWearApk) }
-        tasks.named("mergeGooglePlayDebugAssets") { dependsOn(copyGooglePlayWearApk) }
-        tasks.named("mergeFossReleaseAssets") { dependsOn(copyFossWearApk) }
-        tasks.named("mergeFossDebugAssets") { dependsOn(copyFossWearApk) }
-
-        tasks.matching { it.name.contains("Assets") }.configureEach { dependsOn(copyGooglePlayWearApk, copyFossWearApk) }
-
-        tasks.matching { it.name.startsWith("package") }.configureEach {
-            mustRunAfter(copyGooglePlayWearApk, copyFossWearApk)
-
-        }
-
-        tasks.matching { it.name.contains("lint", ignoreCase = true) }.configureEach {
-            if (name.contains("GooglePlay", ignoreCase = true)) {
-                dependsOn(copyGooglePlayWearApk)
-            } else if (name.contains("Foss", ignoreCase = true)) {
-                dependsOn(copyFossWearApk)
-            }
-        }
-    }
-
     packaging {
         resources {
             excludes += "/META-INF/INDEX.LIST"
@@ -166,6 +118,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)

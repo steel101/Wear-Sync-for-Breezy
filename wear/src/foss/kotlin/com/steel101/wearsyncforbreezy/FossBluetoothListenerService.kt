@@ -21,6 +21,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import com.steel101.wearsyncforbreezy.sync.SyncDataProcessor
 import com.steel101.wearsyncforbreezy.sync.SyncMode
+import com.steel101.wearsyncforbreezy.wear.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -169,7 +170,7 @@ class FossBluetoothListenerService : Service() {
                 
                 // Send immediate version code back to phone so it knows we are up to date
                 try {
-                    val version = com.steel101.wearsyncforbreezy.wear.BuildConfig.VERSION_CODE
+                    val version = BuildConfig.VERSION_CODE
                     socket.outputStream.write("VER|$version\n".toByteArray(Charsets.UTF_8))
                     socket.outputStream.flush()
                 } catch (_: Exception) {}
