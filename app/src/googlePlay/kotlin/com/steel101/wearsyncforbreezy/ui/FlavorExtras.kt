@@ -18,46 +18,55 @@ import com.steel101.wearsyncforbreezy.WeatherSyncViewModel
 import java.util.Locale
 
 import android.net.Uri
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Surface
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.lifecycle.viewModelScope
+import com.steel101.wearsyncforbreezy.AdbNetworkScanner
+import com.steel101.wearsyncforbreezy.sync.AdbInstaller
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.withPermit
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 
 @Composable
 fun SetupInstructions(showLoading: Boolean = true, onDismiss: () -> Unit, viewModel: WeatherSyncViewModel? = null) {
-    var visible by remember { mutableStateOf(showLoading) }
-    if (visible) {
-        SetupInstructionsDialog(onDismiss = {
-            visible = false
-            onDismiss()
-        }, viewModel = viewModel)
+    if (showLoading) {
+        SetupInstructionsDialog(onDismiss = onDismiss, viewModel = viewModel)
     }
 }
 
 @Composable
 fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewModel? = null) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showAdbWizard by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf("") }
+    var isWorking by remember { mutableStateOf(false) }
 
     if (showAdbWizard) {
-        AdbWizardDialog(onDismiss = { showAdbWizard = false }, onComplete = {
-            showAdbWizard = false
-            onDismiss()
-        }, viewModel = viewModel)
+        AdbWizardDialog(
+            onDismiss = { showAdbWizard = false }, 
+            onComplete = {
+                showAdbWizard = false
+                onDismiss()
+            }, 
+            viewModel = viewModel
+        )
     }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isWorking) onDismiss() },
         title = { Text("Watch App Setup") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text("To sync weather, you must sideload the companion app on your watch:")
+                Text("To sync weather, you must sideload the companion app on your watch.")
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("Option A: Automatic (Recommended)", fontWeight = FontWeight.Bold)
-                Text("Let this app install it for you using Wireless ADB.")
+                Text("Step 1: ADB Installation", fontWeight = FontWeight.Bold)
+                Text("Install the companion app automatically using Wireless ADB.")
                 Button(
                     onClick = { showAdbWizard = true },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
@@ -69,8 +78,8 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("Option B: Manual", fontWeight = FontWeight.Bold)
-                Row(modifier = Modifier.padding(vertical = 4.dp)) {
+                Text("Step 2: Manual Installation", fontWeight = FontWeight.Bold)
+                Row(modifier = Modifier.padding(vertical = 8.dp)) {
                     Button(
                         onClick = {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/steel101/Wear-Sync-for-Breezy/releases"))
@@ -78,7 +87,7 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
                         },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("GitHub")
+                        Text("View Releases")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
@@ -90,22 +99,40 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
                         Text("Save APK")
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("2. Enable Developer Mode", fontWeight = FontWeight.Bold)
-                Text("On your Watch: Settings > System > About > Tap 'Build number' 7 times.")
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("3. Install via Bugjaeger", fontWeight = FontWeight.Bold)
-                Text("Use Bugjaeger to install the APK you saved to your phone.")
+
+                if (statusMessage.isNotEmpty()) {
+                    Text(statusMessage, color = if (statusMessage.contains("Error")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                         fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, enabled = !isWorking) {
                 Text("Close")
             }
         }
     )
+}
+
+@Composable
+fun InstructionStep(number: Int, text: String) {
+    Row(modifier = Modifier.padding(vertical = 4.dp)) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(24.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = number.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(text = text, style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
 @Composable
@@ -118,55 +145,302 @@ fun AdbWizardDialog(onDismiss: () -> Unit, onComplete: () -> Unit = {}, viewMode
     var pairingPort by remember { mutableStateOf("") }
     var pairingCode by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
+    var isScanning by remember { mutableStateOf(false) }
+    var isWorking by remember { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("ADB Installer - Step $step") },
+        onDismissRequest = { if (!isWorking) onDismiss() },
+        title = {
+            Column {
+                Text("ADB Installer - Step $step")
+                LinearProgressIndicator(
+                    progress = { step / 4f },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                )
+            }
+        },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 when (step) {
                     1 -> {
-                        Text("1. Connect both devices to the same Wi-Fi.", fontWeight = FontWeight.Bold)
-                        Text("2. On Watch: Settings > System > About > Tap 'Build number' 7 times.")
-                        Text("3. On Watch: Settings > Developer options > Enable 'ADB debugging' and 'Wireless debugging'.")
-                        Text("4. Tap 'Wireless debugging' to see the IP and Port.")
+                        Text("Setup Instructions", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                        InstructionStep(1, "Connect both devices to the same Wi-Fi.")
+                        InstructionStep(2, "On Watch: Settings > System > About > Tap 'Build number' 7 times.")
+                        InstructionStep(3, "On Watch: Settings > Developer options > Enable 'ADB debugging' and 'Wireless debugging'.")
+                        InstructionStep(4, "Tap 'Wireless debugging' to see the IP and Port.")
+                        InstructionStep(5, "Tap Pair new device.")
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    isScanning = true
+                                    status = "Scanning for IP..."
+                                    val scanner = AdbNetworkScanner()
+                                    
+                                    val discoveryJob = launch {
+                                        scanner.discoverWatch(context) { foundIp, _ ->
+                                            ipAddress = foundIp
+                                            isScanning = false
+                                            status = "" 
+                                            step = 2 
+                                            this@launch.cancel()
+                                        }
+                                    }
+                                    
+                                    val subnetJob = launch {
+                                        val quickPorts = listOf(5555, 37000, 44000)
+                                        scanner.scanSubnet(ports = quickPorts) { foundIp, _ ->
+                                            if (isScanning) {
+                                                ipAddress = foundIp
+                                                isScanning = false
+                                                status = ""
+                                                step = 2 
+                                                this@launch.cancel()
+                                            }
+                                        }
+                                    }
+                                    
+                                    withTimeoutOrNull(8000) {
+                                        while(isScanning) { delay(100) }
+                                    }
+                                    
+                                    discoveryJob.cancel()
+                                    subnetJob.cancel()
+                                    isScanning = false
+                                    if (step == 1 && status == "Scanning for IP...") {
+                                        status = "No IP found. Try entering it manually."
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isScanning && !isWorking
+                        ) {
+                            if (isScanning && status.contains("IP")) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Scanning for IP...")
+                            } else {
+                                Text("Scan for IP")
+                            }
+                        }
+
+                        if (status.isNotEmpty() && step == 1) {
+                            Text(status, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp), 
+                                 color = if (status.contains("Found")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                     2 -> {
                         Text("Step 2: Enter Pairing Info", fontWeight = FontWeight.Bold)
-                        Text("On Watch: Tap 'Pair new device'. Enter the Pairing Port and Code shown:")
+                        Text("On Watch: Tap 'Pair new device'. Enter the Pairing Port and Code shown:", style = MaterialTheme.typography.bodySmall)
                         Spacer(modifier = Modifier.height(8.dp))
+
+                        val hasKeys = remember { File(context.filesDir, ".adb/adb_key").exists() }
+                        if (hasKeys && ipAddress.isNotEmpty() && !ipAddress.endsWith(".")) {
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        isWorking = true
+                                        status = "Attempting to reconnect..."
+
+                                        var foundPort = -1
+                                        status = "Scanning for port..."
+                                        withContext(Dispatchers.IO) {
+                                            val allPorts = (30000..65535).toList()
+                                            val semaphore = kotlinx.coroutines.sync.Semaphore(800)
+                                            try {
+                                                coroutineScope {
+                                                    for (port in allPorts) {
+                                                        launch {
+                                                            semaphore.withPermit {
+                                                                try {
+                                                                    java.net.Socket().use { socket ->
+                                                                        socket.connect(java.net.InetSocketAddress(ipAddress, port), 900)
+                                                                        foundPort = port
+                                                                        this@coroutineScope.cancel()
+                                                                    }
+                                                                } catch (e: Exception) {}
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } catch (e: CancellationException) {}
+                                        }
+
+                                        if (foundPort != -1) {
+                                            status = "Found port $foundPort. Connecting..."
+                                            connectPort = foundPort.toString()
+                                            val result = AdbInstaller.testConnection(context, ipAddress, foundPort)
+                                            if (result.isSuccess) {
+                                                status = "Reconnected successfully!"
+                                                delay(800)
+                                                step = 4
+                                            } else {
+                                                status = "Connection failed. Please pair again."
+                                            }
+                                        } else {
+                                            val standardPorts = listOf(5555, 37000, 44000)
+                                            var success = false
+                                            for (port in standardPorts) {
+                                                status = "Checking port $port..."
+                                                val result = AdbInstaller.testConnection(context, ipAddress, port)
+                                                if (result.isSuccess) {
+                                                    connectPort = port.toString()
+                                                    success = true
+                                                    break
+                                                }
+                                            }
+                                            
+                                            if (success) {
+                                                status = "Reconnected!"
+                                                delay(800)
+                                                step = 4
+                                            } else {
+                                                status = "Could not find active watch. Ensure Wireless Debugging is on."
+                                            }
+                                        }
+                                        isWorking = false
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                enabled = !isScanning && !isWorking
+                            ) {
+                                if (isWorking && status.contains("Scanning")) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Finding Watch...")
+                                } else {
+                                    Text("Try Quick Reconnect")
+                                }
+                            }
+                        }
+
                         OutlinedTextField(
                             value = ipAddress,
                             onValueChange = { ipAddress = it },
                             label = { Text("IP Address") },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isWorking
                         )
                         OutlinedTextField(
                             value = pairingCode,
                             onValueChange = { pairingCode = it },
                             label = { Text("Pairing Code") },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            enabled = !isWorking
                         )
-                        OutlinedTextField(
-                            value = pairingPort,
-                            onValueChange = { pairingPort = it },
-                            label = { Text("Pairing Port (NOT 5555)") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = pairingPort,
+                                onValueChange = { pairingPort = it },
+                                label = { Text("Pairing Port") },
+                                modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                enabled = !isWorking
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        isScanning = true
+                                        status = "Searching for pairing port..."
+                                        withContext(Dispatchers.IO) {
+                                            val ports = (30000..65535).toList()
+                                            val semaphore = kotlinx.coroutines.sync.Semaphore(800)
+                                            try {
+                                                coroutineScope {
+                                                    for (port in ports) {
+                                                        if (port.toString() == connectPort) continue
+                                                        
+                                                        launch {
+                                                            semaphore.withPermit {
+                                                                try {
+                                                                    java.net.Socket().use { socket ->
+                                                                        socket.connect(java.net.InetSocketAddress(ipAddress, port), 900)
+                                                                        pairingPort = port.toString()
+                                                                        status = "Found pairing port: $port"
+                                                                        this@coroutineScope.cancel()
+                                                                    }
+                                                                } catch (e: Exception) {}
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } catch (e: CancellationException) {}
+                                        }
+                                        isScanning = false
+                                        if (pairingPort.isEmpty()) status = "Port not found. Make sure 'Pair new device' is open."
+                                    }
+                                },
+                                enabled = !isScanning && !isWorking && ipAddress.isNotEmpty() && !ipAddress.endsWith(".")
+                            ) {
+                                if (isScanning) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Text("Scan")
+                                }
+                            }
+                        }
                         if (status.isNotEmpty()) {
                             Text(status, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
                         }
                     }
                     3 -> {
                         Text("Step 3: Enter Connection Port", fontWeight = FontWeight.Bold)
-                        Text("Go back to the main Wireless Debugging screen on the watch. Enter the port shown there (usually 5555):")
+                        Text("Go back to the main Wireless Debugging screen on the watch. Enter the port shown there (under IP address):", style = MaterialTheme.typography.bodySmall)
                         Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = connectPort,
-                            onValueChange = { connectPort = it },
-                            label = { Text("Connection Port") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = connectPort,
+                                onValueChange = { connectPort = it },
+                                label = { Text("Connection Port") },
+                                modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                enabled = !isWorking
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        isScanning = true
+                                        status = "Searching for connection port..."
+                                        withContext(Dispatchers.IO) {
+                                            val allPorts = (30000..65535).toList()
+                                            val semaphore = kotlinx.coroutines.sync.Semaphore(800)
+                                            try {
+                                                coroutineScope {
+                                                    for (port in allPorts) {
+                                                        launch {
+                                                            semaphore.withPermit {
+                                                                try {
+                                                                    java.net.Socket().use { socket ->
+                                                                        socket.connect(java.net.InetSocketAddress(ipAddress, port), 900)
+                                                                        connectPort = port.toString()
+                                                                        status = "Found connection port: $port"
+                                                                        this@coroutineScope.cancel()
+                                                                    }
+                                                                } catch (e: Exception) {}
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } catch (e: CancellationException) {}
+                                        }
+                                        isScanning = false
+                                        if (!status.contains("Found")) status = "Port not found. Enter manually."
+                                    }
+                                },
+                                enabled = !isScanning && !isWorking && ipAddress.isNotEmpty() && !ipAddress.endsWith(".")
+                            ) {
+                                if (isScanning) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Text("Scan")
+                                }
+                            }
+                        }
                     }
                     4 -> {
                         Text("Ready to install!", fontWeight = FontWeight.Bold)
@@ -179,65 +453,76 @@ fun AdbWizardDialog(onDismiss: () -> Unit, onComplete: () -> Unit = {}, viewMode
             }
         },
         confirmButton = {
-            Button(onClick = {
-                when (step) {
-                    1 -> step = 2
-                    2 -> {
-                        scope.launch {
-                            status = "Pairing..."
-                            val result = com.steel101.wearsyncforbreezy.sync.AdbInstaller.pairWatch(
-                                context, ipAddress, pairingPort.toIntOrNull() ?: 0, pairingCode
-                            )
-                            status = result.fold(
-                                onSuccess = { "Success! Tap Next." },
-                                onFailure = { "Pairing failed: ${it.message}" }
-                            )
-                            if (result.isSuccess) {
-                                delay(1000)
-                                step = 3
-                            }
-                        }
-                    }
-                    3 -> step = 4
-                    4 -> {
-                        scope.launch {
-                            status = "Installing..."
-                            try {
-                                val apkFile = withContext(Dispatchers.IO) {
-                                    val file = File(context.cacheDir, "wear_adb_install.apk")
-                                    context.assets.open("wear_companion.apk").use { it.copyTo(file.outputStream()) }
-                                    file
-                                }
-                                val result = com.steel101.wearsyncforbreezy.sync.AdbInstaller.installToWatch(
-                                    context, ipAddress, connectPort.toIntOrNull() ?: 5555, apkFile
+            Button(
+                onClick = {
+                    when (step) {
+                        1 -> step = 2
+                        2 -> {
+                            scope.launch {
+                                isWorking = true
+                                status = "Pairing..."
+                                val result = AdbInstaller.pairWatch(
+                                    context, ipAddress, pairingPort.toIntOrNull() ?: 0, pairingCode
                                 )
+                                status = result.fold(
+                                    onSuccess = { "Success! Tap Next." },
+                                    onFailure = { "Pairing failed: ${it.message}" }
+                                )
+                                isWorking = false
                                 if (result.isSuccess) {
-                                    status = "Installation successful! Closing setup..."
-                                    delay(500)
-                                    onComplete()
-
-
-                                    scope.launch {
-                                        delay(5000)
-                                        Log.d("FlavorExtras", "Opening watch app...")
-                                        com.steel101.wearsyncforbreezy.sync.AdbInstaller.openWatchApp(
-                                            context, ipAddress, connectPort.toIntOrNull() ?: 5555
-                                        )
-                                        
-                                        delay(5000)
-                                        Log.d("FlavorExtras", "Syncing weather...")
-                                        viewModel?.fetchAndSync(context)
-                                    }
-                                } else {
-                                    status = "Error: ${result.exceptionOrNull()?.message}"
+                                    delay(800)
+                                    step = 3
                                 }
-                            } catch (e: Exception) {
-                                status = "Failed: ${e.message}"
+                            }
+                        }
+                        3 -> step = 4
+                        4 -> {
+                            scope.launch {
+                                isWorking = true
+                                status = "Installing..."
+                                try {
+                                    val apkFile = withContext(Dispatchers.IO) {
+                                        val file = File(context.cacheDir, "wear_adb_install.apk")
+                                        context.assets.open("wear_companion.apk").use { it.copyTo(file.outputStream()) }
+                                        file
+                                    }
+                                    val result = AdbInstaller.installToWatch(
+                                        context, ipAddress, connectPort.toIntOrNull() ?: 5555, apkFile
+                                    )
+                                    if (result.isSuccess) {
+                                        status = "Installation successful!"
+                                        delay(800)
+                                        onComplete()
+
+                                        viewModel?.let { vm ->
+                                            vm.viewModelScope.launch {
+                                                delay(2000)
+                                                Log.d("FlavorExtras", "Opening watch app...")
+                                                AdbInstaller.openWatchApp(context, ipAddress, connectPort.toIntOrNull() ?: 5555)
+                                                
+                                                delay(5000)
+                                                Log.d("FlavorExtras", "Syncing weather...")
+                                                vm.fetchAndSync(context)
+                                            }
+                                        }
+                                    } else {
+                                        status = "Error: ${result.exceptionOrNull()?.message}"
+                                        isWorking = false
+                                    }
+                                } catch (e: Exception) {
+                                    status = "Failed: ${e.message}"
+                                    isWorking = false
+                                }
                             }
                         }
                     }
+                },
+                enabled = !isWorking && (step != 2 || (pairingCode.length >= 6 && pairingPort.isNotEmpty()))
+            ) {
+                if (isWorking) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
-            }) {
                 Text(when (step) {
                     2 -> "Pair"
                     4 -> "Install"
@@ -246,7 +531,10 @@ fun AdbWizardDialog(onDismiss: () -> Unit, onComplete: () -> Unit = {}, viewMode
             }
         },
         dismissButton = {
-            TextButton(onClick = { if (step > 1) step-- else onDismiss() }) {
+            TextButton(
+                onClick = { if (step > 1) { step--; status = "" } else onDismiss() },
+                enabled = !isWorking
+            ) {
                 Text(if (step > 1) "Back" else "Cancel")
             }
         }
@@ -282,11 +570,10 @@ suspend fun getWatchStatus(context: Context): String {
 }
 
 fun startSyncService(context: Context) {
-    // Google Play Services uses WearableListenerService which is auto-started
 }
 
 private fun saveApkToDownloads(context: Context) {
-    val fileName = "${com.steel101.wearsyncforbreezy.shared.BuildConfig.VERSION_CODE}.watch.apk"
+    val fileName = "WearSync-vInstaller.apk"
     try {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             val contentValues = android.content.ContentValues().apply {
@@ -309,12 +596,6 @@ private fun saveApkToDownloads(context: Context) {
                 android.widget.Toast.makeText(context, "Saved to Downloads: $fileName", android.widget.Toast.LENGTH_LONG).show()
             }
         } else {
-            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) 
-                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                android.widget.Toast.makeText(context, "Please grant storage permission in settings to save the APK", android.widget.Toast.LENGTH_LONG).show()
-                return
-            }
-            
             val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
             val targetFile = File(downloadsDir, fileName)
 

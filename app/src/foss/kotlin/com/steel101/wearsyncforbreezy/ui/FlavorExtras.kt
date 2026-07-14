@@ -38,6 +38,7 @@ import androidx.lifecycle.viewModelScope
 import com.steel101.wearsyncforbreezy.AdbNetworkScanner
 import com.steel101.wearsyncforbreezy.sync.AdbInstaller
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.withPermit
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -46,7 +47,7 @@ import java.net.URL
 
 object CompanionApkManager {
     private const val REPO_PATH = "steel101/Wear-Sync-for-Breezy"
-    private const val FILE_NAME = "Wear-FOSS-Release.apk"
+    private const val FILE_NAME = "floss-watch.apk"
     
     fun getCachedApk(context: Context): File {
         return File(context.cacheDir, "companion_wear_app.apk")
@@ -58,7 +59,7 @@ object CompanionApkManager {
         onProgress: (Int) -> Unit
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
-            val downloadUrl = "https://github.com/$REPO_PATH/releases/download/$versionName/$FILE_NAME"
+            val downloadUrl = "https://github.com/$REPO_PATH/releases/download/Release-Build-v$versionName/$FILE_NAME"
             val url = URL(downloadUrl)
             val connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = 15000
@@ -257,12 +258,31 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
                         }
                     }
                 } else {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                        Icon(Icons.Default.CheckCircle, "Ready", tint = MaterialTheme.colorScheme.primary)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = "Ready",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("APK is ready for installation", color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.weight(1f))
-                        TextButton(onClick = { apkFile = null; CompanionApkManager.getCachedApk(context).delete() }) {
+                        Text(
+                            text = "APK is ready for installation",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(
+                            onClick = { 
+                                apkFile = null
+                                CompanionApkManager.getCachedApk(context).delete() 
+                            },
+                            contentPadding = PaddingValues(horizontal = 12.dp)
+                        ) {
                             Text("Clear")
                         }
                     }
@@ -368,36 +388,65 @@ fun AdbWizardDialog(apkFile: File, onDismiss: () -> Unit, onComplete: () -> Unit
                         InstructionStep(2, "On Watch: Settings > System > About > Tap 'Build number' 7 times.")
                         InstructionStep(3, "On Watch: Settings > Developer options > Enable 'ADB debugging' and 'Wireless debugging'.")
                         InstructionStep(4, "Tap 'Wireless debugging' to see the IP and Port.")
-                        
+                        InstructionStep(5, "Tap Pair new device.")
+
                         Spacer(modifier = Modifier.height(16.dp))
+
                         Button(
                             onClick = {
                                 scope.launch {
                                     isScanning = true
-                                    status = "Scanning network..."
+                                    status = "Scanning for IP..."
                                     val scanner = AdbNetworkScanner()
-                                    // Scan a wider range of likely ADB ports
-                                    scanner.scanSubnet(ports = listOf(5555, 5556, 5557, 5558)) { foundIp: String, foundPort: Int ->
-                                        ipAddress = foundIp
-                                        connectPort = foundPort.toString()
-                                        status = "Found device at $foundIp"
+                                    
+                                    val discoveryJob = launch {
+                                        scanner.discoverWatch(context) { foundIp, _ ->
+                                            ipAddress = foundIp
+                                            isScanning = false
+                                            status = "" 
+                                            step = 2 
+                                            this@launch.cancel()
+                                        }
                                     }
+                                    
+                                    val subnetJob = launch {
+                                        val quickPorts = listOf(5555, 37000, 44000)
+                                        scanner.scanSubnet(ports = quickPorts) { foundIp, _ ->
+                                            if (isScanning) {
+                                                ipAddress = foundIp
+                                                isScanning = false
+                                                status = ""
+                                                step = 2 
+                                                this@launch.cancel()
+                                            }
+                                        }
+                                    }
+                                    
+                                    withTimeoutOrNull(8000) {
+                                        while(isScanning) { delay(100) }
+                                    }
+                                    
+                                    discoveryJob.cancel()
+                                    subnetJob.cancel()
                                     isScanning = false
-                                    if (status == "Scanning network...") status = "No device found. Ensure ADB is enabled on the watch."
+                                    if (step == 1 && status == "Scanning for IP...") {
+                                        status = "No IP found. Try entering it manually."
+                                    }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !isScanning && !isWorking
                         ) {
-                            if (isScanning) {
+                            if (isScanning && status.contains("IP")) {
                                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Scanning...")
+                                Text("Scanning for IP...")
                             } else {
-                                Text("Scan for Watch")
+                                Text("Scan for IP")
                             }
                         }
-                        if (status.isNotEmpty()) {
+
+                        if (status.isNotEmpty() && step == 1) {
                             Text(status, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp), 
                                  color = if (status.contains("Found")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -406,6 +455,87 @@ fun AdbWizardDialog(apkFile: File, onDismiss: () -> Unit, onComplete: () -> Unit
                         Text("Step 2: Enter Pairing Info", fontWeight = FontWeight.Bold)
                         Text("On Watch: Tap 'Pair new device'. Enter the Pairing Port and Code shown:", style = MaterialTheme.typography.bodySmall)
                         Spacer(modifier = Modifier.height(8.dp))
+
+                        val hasKeys = remember { File(context.filesDir, ".adb/adb_key").exists() }
+                        if (hasKeys && ipAddress.isNotEmpty() && !ipAddress.endsWith(".")) {
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        isWorking = true
+                                        status = "Attempting to reconnect..."
+
+                                        var foundPort = -1
+                                        status = "Scanning for port..."
+                                        withContext(Dispatchers.IO) {
+                                            val allPorts = (30000..65535).toList()
+                                            val semaphore = kotlinx.coroutines.sync.Semaphore(800)
+                                            try {
+                                                coroutineScope {
+                                                    for (port in allPorts) {
+                                                        launch {
+                                                            semaphore.withPermit {
+                                                                try {
+                                                                    java.net.Socket().use { socket ->
+                                                                        socket.connect(java.net.InetSocketAddress(ipAddress, port), 900)
+                                                                        foundPort = port
+                                                                        this@coroutineScope.cancel()
+                                                                    }
+                                                                } catch (e: Exception) {}
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } catch (e: CancellationException) {}
+                                        }
+
+                                        if (foundPort != -1) {
+                                            status = "Found port $foundPort. Connecting..."
+                                            connectPort = foundPort.toString()
+                                            val result = AdbInstaller.testConnection(context, ipAddress, foundPort)
+                                            if (result.isSuccess) {
+                                                status = "Reconnected successfully!"
+                                                delay(800)
+                                                step = 4
+                                            } else {
+                                                status = "Connection failed. Please pair again."
+                                            }
+                                        } else {
+                                            val standardPorts = listOf(5555, 37000, 44000)
+                                            var success = false
+                                            for (port in standardPorts) {
+                                                status = "Checking port $port..."
+                                                val result = AdbInstaller.testConnection(context, ipAddress, port)
+                                                if (result.isSuccess) {
+                                                    connectPort = port.toString()
+                                                    success = true
+                                                    break
+                                                }
+                                            }
+                                            
+                                            if (success) {
+                                                status = "Reconnected!"
+                                                delay(800)
+                                                step = 4
+                                            } else {
+                                                status = "Could not find active watch. Ensure Wireless Debugging is on."
+                                            }
+                                        }
+                                        isWorking = false
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                enabled = !isScanning && !isWorking
+                            ) {
+                                if (isWorking && status.contains("Scanning")) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Finding Watch...")
+                                } else {
+                                    Text("Try Quick Reconnect")
+                                }
+                            }
+                        }
+
                         OutlinedTextField(
                             value = ipAddress,
                             onValueChange = { ipAddress = it },
@@ -437,27 +567,31 @@ fun AdbWizardDialog(apkFile: File, onDismiss: () -> Unit, onComplete: () -> Unit
                                         isScanning = true
                                         status = "Searching for pairing port..."
                                         withContext(Dispatchers.IO) {
-                                            val ports = (37000..45000).toList()
-                                            ports.chunked(100).forEach { batch ->
-                                                if (pairingPort.isNotEmpty()) return@forEach
+                                            val ports = (30000..65535).toList()
+                                            val semaphore = kotlinx.coroutines.sync.Semaphore(800)
+                                            try {
                                                 coroutineScope {
-                                                    for (port in batch) {
+                                                    for (port in ports) {
+                                                        if (port.toString() == connectPort) continue
+                                                        
                                                         launch {
-                                                            try {
-                                                                java.net.Socket().use { socket ->
-                                                                    socket.connect(java.net.InetSocketAddress(ipAddress, port), 150)
-                                                                    pairingPort = port.toString()
-                                                                    status = "Found pairing port: $port"
-                                                                    this@coroutineScope.cancel()
-                                                                }
-                                                            } catch (e: Exception) {}
+                                                            semaphore.withPermit {
+                                                                try {
+                                                                    java.net.Socket().use { socket ->
+                                                                        socket.connect(java.net.InetSocketAddress(ipAddress, port), 900)
+                                                                        pairingPort = port.toString()
+                                                                        status = "Found pairing port: $port"
+                                                                        this@coroutineScope.cancel()
+                                                                    }
+                                                                } catch (e: Exception) {}
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
+                                            } catch (e: CancellationException) {}
                                         }
                                         isScanning = false
-                                        if (pairingPort.isEmpty()) status = "Port not found. Enter manually."
+                                        if (pairingPort.isEmpty()) status = "Port not found. Make sure 'Pair new device' is open."
                                     }
                                 },
                                 enabled = !isScanning && !isWorking && ipAddress.isNotEmpty() && !ipAddress.endsWith(".")
@@ -475,7 +609,7 @@ fun AdbWizardDialog(apkFile: File, onDismiss: () -> Unit, onComplete: () -> Unit
                     }
                     3 -> {
                         Text("Step 3: Enter Connection Port", fontWeight = FontWeight.Bold)
-                        Text("Go back to the main Wireless Debugging screen on the watch. Enter the port shown there (usually 5555):", style = MaterialTheme.typography.bodySmall)
+                        Text("Go back to the main Wireless Debugging screen on the watch. Enter the port shown there (under IP address):", style = MaterialTheme.typography.bodySmall)
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(
@@ -492,25 +626,27 @@ fun AdbWizardDialog(apkFile: File, onDismiss: () -> Unit, onComplete: () -> Unit
                                     scope.launch {
                                         isScanning = true
                                         status = "Searching for connection port..."
-                                        val ports = listOf(5555) + (37000..45000).toList()
                                         withContext(Dispatchers.IO) {
-                                            ports.chunked(100).forEach { batch ->
-                                                if (status.contains("Found")) return@forEach
+                                            val allPorts = (30000..65535).toList()
+                                            val semaphore = kotlinx.coroutines.sync.Semaphore(800)
+                                            try {
                                                 coroutineScope {
-                                                    for (port in batch) {
+                                                    for (port in allPorts) {
                                                         launch {
-                                                            try {
-                                                                java.net.Socket().use { socket ->
-                                                                    socket.connect(java.net.InetSocketAddress(ipAddress, port), 150)
-                                                                    connectPort = port.toString()
-                                                                    status = "Found connection port: $port"
-                                                                    this@coroutineScope.cancel()
-                                                                }
-                                                            } catch (e: Exception) {}
+                                                            semaphore.withPermit {
+                                                                try {
+                                                                    java.net.Socket().use { socket ->
+                                                                        socket.connect(java.net.InetSocketAddress(ipAddress, port), 900)
+                                                                        connectPort = port.toString()
+                                                                        status = "Found connection port: $port"
+                                                                        this@coroutineScope.cancel()
+                                                                    }
+                                                                } catch (e: Exception) {}
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
+                                            } catch (e: CancellationException) {}
                                         }
                                         isScanning = false
                                         if (!status.contains("Found")) status = "Port not found. Enter manually."
@@ -844,7 +980,6 @@ private fun performPushUpdate(
             }
             if (success) {
                 onStatusChange("Update sent! Check watch.")
-                // Optimistically update version so button greys out
                 viewModel?.updateWatchVersion(BuildConfig.VERSION_CODE)
             } else {
                 onStatusChange("Failed. Ensure Watch app is open and paired.")
@@ -880,7 +1015,6 @@ private fun saveApkToDownloads(context: Context, apkFile: File) {
                 android.widget.Toast.makeText(context, "Saved to Downloads: $fileName", android.widget.Toast.LENGTH_LONG).show()
             }
         } else {
-            // ... storage permission check already in original code if needed
             val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
             val targetFile = File(downloadsDir, fileName)
 

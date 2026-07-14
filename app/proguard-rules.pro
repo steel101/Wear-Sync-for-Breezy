@@ -12,6 +12,11 @@
     <init>(android.content.Context, androidx.work.WorkerParameters);
 }
 
+# Optimize R8 even further
+-allowaccessmodification
+-repackageclasses ''
+-overloadaggressively
+
 # HiveMQ / Netty / RxJava ProGuard Rules
 -dontwarn io.netty.**
 -dontwarn com.hivemq.client.internal.netty.**
@@ -28,13 +33,45 @@
 -dontwarn javax.inject.**
 -dontwarn reactor.blockhound.**
 
--keep class com.hivemq.client.** { *; }
--keep class io.netty.** { *; }
+# More surgical keep rules for HiveMQ/Netty to allow shrinking of unused classes
+# We only need the public API and the internals that use reflection
+-keep class com.hivemq.client.mqtt.** { *; }
+-keep class com.hivemq.client.internal.mqtt.** { *; }
+-keep class io.netty.util.** { *; }
+-keep class io.netty.buffer.** { *; }
+-keep class io.netty.channel.** { *; }
+-keep class io.netty.handler.** { *; }
+
+# Netty reflection-based access
+-keepclassmembers class io.netty.** {
+    private static final sun.misc.Unsafe UNSAFE;
+}
+-keep class io.netty.util.internal.shaded.org.jctools.** { *; }
+-keepclassmembers class io.netty.util.internal.shaded.org.jctools.** {
+    <fields>;
+}
+
 -keep class org.slf4j.** { *; }
 -keep class io.reactivex.** { *; }
 -keep class io.reactivex.rxjava3.** { *; }
 -keep class org.reactivestreams.** { *; }
 -keep class javax.inject.** { *; }
+
+# Breezy Weather Data Sharing
+-keep class org.breezyweather.datasharing.** { *; }
+
+# LibADB Android and dependencies
+-keep class io.github.muntashirakon.adb.** { *; }
+-keep class android.sun.security.x509.** { *; }
+-keep class org.conscrypt.** { *; }
+
+# Strip logging for smaller size
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+    public static *** i(...);
+}
+
 
 # Netty / JCTools specific
 -keepclassmembers class io.netty.** {

@@ -30,8 +30,47 @@ object AdbInstaller {
         override fun getCertificate(): Certificate = certificate
         override fun getDeviceName(): String = "BreezyPhone"
         
+        var currentIp: String? = null
+        var currentPort: Int? = null
+        var isAdbConnected: Boolean = false
+
         init {
             api = Build.VERSION.SDK_INT
+        }
+
+        fun connectRobustly(ip: String, port: Int): Boolean {
+            if (isAdbConnected && currentIp == ip && currentPort == port) {
+                Log.d("AdbInstaller", "Already connected to $ip:$port, reusing session")
+                return true
+            }
+            
+            // If connected to something else, close it first
+            if (isAdbConnected) {
+                try { disconnect() } catch (e: Exception) {}
+            }
+
+            return try {
+                if (super.connect(ip, port)) {
+                    currentIp = ip
+                    currentPort = port
+                    isAdbConnected = true
+                    true
+                } else {
+                    isAdbConnected = false
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e("AdbInstaller", "Connect exception", e)
+                isAdbConnected = false
+                false
+            }
+        }
+
+        override fun disconnect() {
+            super.disconnect()
+            isAdbConnected = false
+            currentIp = null
+            currentPort = null
         }
     }
 
@@ -58,6 +97,8 @@ object AdbInstaller {
                 KeyPair(cert.publicKey, privateKey) to cert
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load keys, regenerating...", e)
+                keyFile.delete()
+                certFile.delete()
                 null
             }
         } else null
@@ -103,6 +144,8 @@ object AdbInstaller {
         try {
             Log.d(TAG, "Pairing with $ip:$port using code $pairingCode...")
             val manager = getOrCreateManager(context)
+            // Always disconnect before pairing to ensure a clean state
+            manager.disconnect()
             if (manager.pair(ip, port, pairingCode)) {
                 Result.success("Pairing successful!")
             } else {
@@ -116,10 +159,10 @@ object AdbInstaller {
 
     suspend fun installToWatch(context: Context, ip: String, port: Int, apkFile: File): Result<String> = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Connecting to $ip:$port...")
+            Log.d(TAG, "Connecting to $ip:$port for installation...")
             val manager = getOrCreateManager(context)
             
-            if (!manager.connect(ip, port)) {
+            if (!manager.connectRobustly(ip, port)) {
                 return@withContext Result.failure(Exception("Connection failed. Are you paired?"))
             }
 
@@ -148,7 +191,7 @@ object AdbInstaller {
     suspend fun openWatchApp(context: Context, ip: String, port: Int): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val manager = getOrCreateManager(context)
-            if (!manager.connect(ip, port)) {
+            if (!manager.connectRobustly(ip, port)) {
                 return@withContext Result.failure(Exception("Connection failed for opening app."))
             }
             val packageName = "com.steel101.wearsyncforbreezy"
@@ -159,6 +202,21 @@ object AdbInstaller {
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to open watch app: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun testConnection(context: Context, ip: String, port: Int): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val manager = getOrCreateManager(context)
+            if (manager.connectRobustly(ip, port)) {
+                // Keep the connection open for the next step
+                delay(500)
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("ADB Connect failed"))
+            }
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }
