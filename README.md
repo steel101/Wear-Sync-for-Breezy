@@ -1,4 +1,4 @@
-From now on I will only work fix and patch the floss flovor I don't see the need to keep 2 apps working when the floss app works just fine now 
+From now on I will only work on fix and patch the floss flovor I don't see the need to keep 2 apps working when the floss app works just fine now 
 
 # ☀️ Wear Sync for Breezy
 
