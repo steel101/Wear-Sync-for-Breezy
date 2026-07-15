@@ -1,3 +1,5 @@
+From now on I will only work fix and patch the floss flovor I don't see the need to keep 2 apps working when the floss app works just fine now 
+
 # ☀️ Wear Sync for Breezy
 
 is a lightweight bridge application that seamlessly syncs detailed weather data from the [Breezy Weather Android app](https://github.com/breezy-weather/breezy-weather) to your Wear OS watch.
