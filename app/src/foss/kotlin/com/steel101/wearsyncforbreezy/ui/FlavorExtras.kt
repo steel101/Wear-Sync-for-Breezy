@@ -1079,6 +1079,10 @@ fun startSyncService(context: Context) {
     }
 }
 
+fun requestWatchVersion(context: Context) {
+    // FOSS requests version as part of its normal sync/refresh cycle
+}
+
 private fun performPushUpdate(
     context: Context,
     scope: CoroutineScope,

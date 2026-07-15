@@ -28,8 +28,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.viewModelScope
 import com.steel101.wearsyncforbreezy.AdbNetworkScanner
 import com.steel101.wearsyncforbreezy.sync.AdbInstaller
+import com.steel101.wearsyncforbreezy.sync.GooglePlaySyncManager
 import com.steel101.wearsyncforbreezy.BuildConfig
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
 import java.io.FileOutputStream
@@ -42,8 +44,8 @@ fun SetupInstructions(showLoading: Boolean = true, onDismiss: () -> Unit, viewMo
     }
 }
 
-suspend fun checkIfSetupRequired(context: Context, watchVersionCode: Int): Boolean {
-    return false
+suspend fun checkIfSetupRequired(context: Context, watchVersionCode: Int): Boolean = withContext(Dispatchers.IO) {
+    return@withContext watchVersionCode in 0 until BuildConfig.VERSION_CODE
 }
 
 @Composable
@@ -53,14 +55,40 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
     var showAdbWizard by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("") }
     var isWorking by remember { mutableStateOf(false) }
+    var pushCooldown by remember { mutableIntStateOf(0) }
     var apkVersion by remember { mutableIntStateOf(0) }
     
     val apkFile = remember {
         val file = File(context.cacheDir, "wear_adb_install.apk")
-        if (!file.exists()) {
+        var shouldExtract = !file.exists()
+        if (file.exists()) {
+            val existingVersion = try {
+                val pm = context.packageManager
+                val info = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    pm.getPackageArchiveInfo(file.absolutePath, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+                } else {
+                    @Suppress("DEPRECATION")
+                    pm.getPackageArchiveInfo(file.absolutePath, 0)
+                }
+                info?.versionCode ?: 0
+            } catch (e: Exception) { 0 }
+
+            if (existingVersion != BuildConfig.VERSION_CODE) {
+                shouldExtract = true
+            }
+        }
+        
+        if (shouldExtract) {
             try {
-                context.assets.open("wear_companion.apk").use { it.copyTo(file.outputStream()) }
-            } catch (e: Exception) { Log.e("FlavorExtras", "Failed to extract asset", e) }
+                context.assets.open("wear_companion.apk").use { input ->
+                    file.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Log.d("FlavorExtras", "Extracted wear_companion.apk (v${BuildConfig.VERSION_CODE})")
+            } catch (e: Exception) { 
+                Log.e("FlavorExtras", "Failed to extract asset", e) 
+            }
         }
         file
     }
@@ -76,20 +104,79 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
         )
     }
 
+    val watchVersionCode by (viewModel?.watchVersionCode ?: remember { MutableStateFlow(-1) }).collectAsState()
+
     AlertDialog(
-        onDismissRequest = { if (!isWorking) onDismiss() },
-        title = { Text("Watch App Setup") },
+        onDismissRequest = { 
+            val isWatchUpToDate = watchVersionCode >= BuildConfig.VERSION_CODE
+            if (isWatchUpToDate && !isWorking) onDismiss() 
+        },
+        title = { Text("Watch App Update Required") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text("To sync weather, you must sideload the companion app on your watch.")
+                val isWatchUpToDate = watchVersionCode >= BuildConfig.VERSION_CODE
+                if (!isWatchUpToDate) {
+                    Text(
+                        "A new version of the watch app (v${BuildConfig.VERSION_CODE}) is required for full compatibility. Your watch is currently running v${if (watchVersionCode > 0) watchVersionCode else "unknown"}.",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                Text("To sync weather, you must sideload the latest companion app on your watch.")
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("Step 1: ADB Installation", fontWeight = FontWeight.Bold)
-                
-                Text("Install the companion app automatically using Wireless ADB.")
+                Text("Option 1: Push Update", fontWeight = FontWeight.Bold)
+                Text("Beams the update directly to your watch over Bluetooth.", style = MaterialTheme.typography.bodySmall)
+                Button(
+                    onClick = {
+                        isWorking = true
+                        statusMessage = "Pushing update to watch..."
+                        pushCooldown = 10
+                        scope.launch {
+                            val success = GooglePlaySyncManager.sendApkToWatch(context, apkFile)
+                            if (success) {
+                                statusMessage = "Update sent! Check your watch for an install notification."
+                                viewModel?.updateWatchVersion(context, BuildConfig.VERSION_CODE)
+                            } else {
+                                statusMessage = "Push failed. Ensure watch is connected and Bluetooth is on."
+                            }
+                            isWorking = false
+                            
+                            // Keep it greyed out for exactly 10 seconds total
+                            while (pushCooldown > 0) {
+                                delay(1000)
+                                pushCooldown--
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    enabled = !isWorking && pushCooldown == 0
+                ) {
+                    if (pushCooldown > 0) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Sending to Watch (${pushCooldown}s)")
+                    } else {
+                        if (isWorking && statusMessage.contains("Pushing")) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text("Push Update to Watch")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Option 2: Wireless ADB", fontWeight = FontWeight.Bold)
+                Text("Reliable installation if Bluetooth push fails.", style = MaterialTheme.typography.bodySmall)
                 Button(
                     onClick = { showAdbWizard = true },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    enabled = !isWorking && pushCooldown == 0
                 ) {
                     Text("Start ADB Installer")
                 }
@@ -98,7 +185,7 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text("Step 2: Manual Installation", fontWeight = FontWeight.Bold)
+                Text("Option 3: Manual Installation", fontWeight = FontWeight.Bold)
                 Row(modifier = Modifier.padding(vertical = 8.dp)) {
                     Button(
                         onClick = {
@@ -107,7 +194,7 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
                         },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("View Releases")
+                        Text("Releases")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
@@ -121,14 +208,17 @@ fun SetupInstructionsDialog(onDismiss: () -> Unit, viewModel: WeatherSyncViewMod
                 }
 
                 if (statusMessage.isNotEmpty()) {
-                    Text(statusMessage, color = if (statusMessage.contains("Error")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    Text(statusMessage, color = if (statusMessage.contains("Error") || statusMessage.contains("failed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                          fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss, enabled = !isWorking) {
-                Text("Close")
+            val isWatchUpToDate = watchVersionCode >= BuildConfig.VERSION_CODE
+            if (isWatchUpToDate) {
+                TextButton(onClick = onDismiss, enabled = !isWorking) {
+                    Text("Close")
+                }
             }
         }
     )
@@ -591,6 +681,12 @@ fun FlavorSettings(viewModel: WeatherSyncViewModel) {
 
 suspend fun getWatchStatus(context: Context): String {
     return "Google Play Services Active"
+}
+
+fun requestWatchVersion(context: Context) {
+    CoroutineScope(Dispatchers.IO).launch {
+        GooglePlaySyncManager.requestWatchVersion(context)
+    }
 }
 
 fun startSyncService(context: Context) {

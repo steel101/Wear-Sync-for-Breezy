@@ -163,6 +163,7 @@ fun WeatherSyncScreen(
         viewModel.loadCachedTime(context)
         viewModel.checkAndFetchInitialData(context)
         viewModel.updateWatchStatus(context)
+        viewModel.refreshWatchVersion(context)
 
         if (prefs.getString("last_store_flavor", "") != currentFlavor) {
             prefs.edit().putString("last_store_flavor", currentFlavor).apply()

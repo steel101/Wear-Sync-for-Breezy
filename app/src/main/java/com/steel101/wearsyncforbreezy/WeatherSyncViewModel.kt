@@ -11,6 +11,7 @@ import androidx.work.*
 import com.steel101.wearsyncforbreezy.sync.SyncProvider
 import com.steel101.wearsyncforbreezy.sync.WeatherSyncWorker
 import com.steel101.wearsyncforbreezy.ui.getWatchStatus
+import com.steel101.wearsyncforbreezy.ui.requestWatchVersion
 import org.breezyweather.datasharing.BreezyLocation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,12 +55,18 @@ class WeatherSyncViewModel : ViewModel() {
     private val _watchVersionCode = MutableStateFlow(-1)
     val watchVersionCode: StateFlow<Int> = _watchVersionCode
 
+    private var prefsListener: android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
+
     fun updateWatchVersion(context: Context, version: Int) {
         _watchVersionCode.value = version
         val watchPrefs = context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
         watchPrefs.edit {
             putInt("watch_version_code", version)
         }
+    }
+
+    fun refreshWatchVersion(context: Context) {
+        requestWatchVersion(context)
     }
 
     fun updateWatchStatus(context: Context) {
@@ -78,7 +85,20 @@ class WeatherSyncViewModel : ViewModel() {
         val watchPrefs = context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
         _watchVersionCode.value = watchPrefs.getInt("watch_version_code", -1)
 
+        if (prefsListener == null) {
+            prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+                if (key == "watch_version_code") {
+                    _watchVersionCode.value = p.getInt(key, -1)
+                }
+            }
+            watchPrefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        }
+
         scheduleBackgroundSync(context, enabled)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
     }
 
     fun setAutoSync(context: Context, enabled: Boolean) {
@@ -160,7 +180,6 @@ class WeatherSyncViewModel : ViewModel() {
                         }
                         _lastSyncTime.value = now
 
-                        // Update watch version code from prefs after sync
                         val watchPrefs = context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
                         _watchVersionCode.value = watchPrefs.getInt("watch_version_code", -1)
                     }

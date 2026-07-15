@@ -179,6 +179,26 @@ object AdbInstaller {
                 }
             }
 
+            val packageName = "com.steel101.wearsyncforbreezy"
+            val permissions = listOf(
+                "android.permission.BLUETOOTH_CONNECT",
+                "android.permission.POST_NOTIFICATIONS"
+            )
+            
+            for (perm in permissions) {
+                try {
+                    manager.openStream("shell:pm grant $packageName $perm").use { stream ->
+                        val input = stream.openInputStream()
+                        val buffer = ByteArray(1024)
+                        while (input.read(buffer) != -1) {
+                            // Consume output
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to grant $perm: ${e.message}")
+                }
+            }
+
             Result.success("Installation finished! Check your watch.")
         } catch (e: Exception) {
             Log.e(TAG, "ADB Installation failed: ${e.message}", e)
