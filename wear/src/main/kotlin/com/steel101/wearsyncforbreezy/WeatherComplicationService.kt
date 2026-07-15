@@ -20,6 +20,7 @@ class WeatherComplicationService : ComplicationDataSourceService() {
     ) {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
         val temp = prefs.getString("temp", "--") ?: "--"
+        val conditionIcon = prefs.getString("cond_icon", "☀️") ?: "☀️"
 
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -30,6 +31,7 @@ class WeatherComplicationService : ComplicationDataSourceService() {
                     text = PlainComplicationText.Builder(temp).build(),
                     contentDescription = PlainComplicationText.Builder("Current Temperature").build()
                 )
+                .setTitle(PlainComplicationText.Builder(conditionIcon).build())
                 .setTapAction(pendingIntent)
                 .build()
             }
@@ -43,7 +45,7 @@ class WeatherComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("Current Temperature").build()
                 )
                 .setText(PlainComplicationText.Builder(temp).build())
-                .setTitle(PlainComplicationText.Builder("Temp").build())
+                .setTitle(PlainComplicationText.Builder(conditionIcon).build())
                 .setColorRamp(ColorRamp(intArrayOf(color), true))
                 .setTapAction(pendingIntent)
                 .build()
@@ -59,7 +61,20 @@ class WeatherComplicationService : ComplicationDataSourceService() {
                 ShortTextComplicationData.Builder(
                     text = PlainComplicationText.Builder("72°").build(),
                     contentDescription = PlainComplicationText.Builder("Current Temperature").build()
-                ).build()
+                )
+                .setTitle(PlainComplicationText.Builder("☀️").build())
+                .build()
+            }
+            ComplicationType.RANGED_VALUE -> {
+                RangedValueComplicationData.Builder(
+                    value = 72f,
+                    min = -20f,
+                    max = 120f,
+                    contentDescription = PlainComplicationText.Builder("Current Temperature").build()
+                )
+                .setText(PlainComplicationText.Builder("72°").build())
+                .setTitle(PlainComplicationText.Builder("☀️").build())
+                .build()
             }
             else -> null
         }

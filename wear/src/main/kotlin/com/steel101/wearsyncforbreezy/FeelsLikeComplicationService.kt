@@ -19,6 +19,7 @@ class FeelsLikeComplicationService : ComplicationDataSourceService() {
     ) {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
         val feelsLike = prefs.getString("feels_like", "--") ?: "--"
+        val conditionIcon = prefs.getString("cond_icon", "☀️") ?: "☀️"
 
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -28,7 +29,10 @@ class FeelsLikeComplicationService : ComplicationDataSourceService() {
                 ShortTextComplicationData.Builder(
                     text = PlainComplicationText.Builder(feelsLike).build(),
                     contentDescription = PlainComplicationText.Builder("Feels Like Temperature").build()
-                ).setTapAction(pendingIntent).build()
+                )
+                .setTitle(PlainComplicationText.Builder(conditionIcon).build())
+                .setTapAction(pendingIntent)
+                .build()
             }
             ComplicationType.RANGED_VALUE -> {
                 val value = feelsLike.filter { it.isDigit() || it == '-' }.toFloatOrNull() ?: 0f
@@ -40,7 +44,7 @@ class FeelsLikeComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("Feels Like Temperature").build()
                 )
                 .setText(PlainComplicationText.Builder(feelsLike).build())
-                .setTitle(PlainComplicationText.Builder("Feels").build())
+                .setTitle(PlainComplicationText.Builder(conditionIcon).build())
                 .setColorRamp(ColorRamp(intArrayOf(color), true))
                 .setTapAction(pendingIntent)
                 .build()
@@ -56,7 +60,9 @@ class FeelsLikeComplicationService : ComplicationDataSourceService() {
                 ShortTextComplicationData.Builder(
                     text = PlainComplicationText.Builder("70°").build(),
                     contentDescription = PlainComplicationText.Builder("Feels Like Temperature").build()
-                ).build()
+                )
+                .setTitle(PlainComplicationText.Builder("☀️").build())
+                .build()
             }
             ComplicationType.RANGED_VALUE -> {
                 RangedValueComplicationData.Builder(
@@ -66,7 +72,7 @@ class FeelsLikeComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("Feels Like Temperature").build()
                 )
                 .setText(PlainComplicationText.Builder("70°").build())
-                .setTitle(PlainComplicationText.Builder("Feels").build())
+                .setTitle(PlainComplicationText.Builder("☀️").build())
                 .build()
             }
             else -> null

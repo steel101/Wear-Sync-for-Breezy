@@ -28,7 +28,10 @@ class UvComplicationService : ComplicationDataSourceService() {
                 ShortTextComplicationData.Builder(
                     text = PlainComplicationText.Builder(uv).build(),
                     contentDescription = PlainComplicationText.Builder("UV Index").build()
-                ).setTapAction(pendingIntent).build()
+                )
+                .setTitle(PlainComplicationText.Builder("☀️").build())
+                .setTapAction(pendingIntent)
+                .build()
             }
             ComplicationType.RANGED_VALUE -> {
                 val value = uv.toFloatOrNull() ?: 0f
@@ -40,7 +43,7 @@ class UvComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("UV Index").build()
                 )
                 .setText(PlainComplicationText.Builder(uv).build())
-                .setTitle(PlainComplicationText.Builder("UV").build())
+                .setTitle(PlainComplicationText.Builder("☀️").build())
                 .setColorRamp(ColorRamp(intArrayOf(color), true))
                 .setTapAction(pendingIntent)
                 .build()
@@ -56,7 +59,9 @@ class UvComplicationService : ComplicationDataSourceService() {
                 ShortTextComplicationData.Builder(
                     text = PlainComplicationText.Builder("5.2").build(),
                     contentDescription = PlainComplicationText.Builder("UV Index").build()
-                ).build()
+                )
+                .setTitle(PlainComplicationText.Builder("☀️").build())
+                .build()
             }
             ComplicationType.RANGED_VALUE -> {
                 RangedValueComplicationData.Builder(
@@ -66,7 +71,7 @@ class UvComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("UV Index").build()
                 )
                 .setText(PlainComplicationText.Builder("5.2").build())
-                .setTitle(PlainComplicationText.Builder("UV").build())
+                .setTitle(PlainComplicationText.Builder("☀️").build())
                 .build()
             }
             else -> null

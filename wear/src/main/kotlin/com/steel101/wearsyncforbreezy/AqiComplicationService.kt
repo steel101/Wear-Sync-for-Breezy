@@ -28,7 +28,10 @@ class AqiComplicationService : ComplicationDataSourceService() {
                 ShortTextComplicationData.Builder(
                     text = PlainComplicationText.Builder(aqi).build(),
                     contentDescription = PlainComplicationText.Builder("Air Quality Index").build()
-                ).setTapAction(pendingIntent).build()
+                )
+                .setTitle(PlainComplicationText.Builder("🌫️").build())
+                .setTapAction(pendingIntent)
+                .build()
             }
             ComplicationType.RANGED_VALUE -> {
                 val value = aqi.toFloatOrNull() ?: 0f
@@ -40,7 +43,7 @@ class AqiComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("Air Quality Index").build()
                 )
                 .setText(PlainComplicationText.Builder(aqi).build())
-                .setTitle(PlainComplicationText.Builder("AQI").build())
+                .setTitle(PlainComplicationText.Builder("🌫️").build())
                 .setColorRamp(ColorRamp(intArrayOf(color), true))
                 .setTapAction(pendingIntent)
                 .build()
@@ -56,7 +59,9 @@ class AqiComplicationService : ComplicationDataSourceService() {
                 ShortTextComplicationData.Builder(
                     text = PlainComplicationText.Builder("42").build(),
                     contentDescription = PlainComplicationText.Builder("Air Quality Index").build()
-                ).build()
+                )
+                .setTitle(PlainComplicationText.Builder("🌫️").build())
+                .build()
             }
             ComplicationType.RANGED_VALUE -> {
                 RangedValueComplicationData.Builder(
@@ -66,7 +71,7 @@ class AqiComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("Air Quality Index").build()
                 )
                 .setText(PlainComplicationText.Builder("42").build())
-                .setTitle(PlainComplicationText.Builder("AQI").build())
+                .setTitle(PlainComplicationText.Builder("🌫️").build())
                 .build()
             }
             else -> null

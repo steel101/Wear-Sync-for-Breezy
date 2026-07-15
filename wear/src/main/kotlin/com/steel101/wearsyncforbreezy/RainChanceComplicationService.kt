@@ -30,7 +30,10 @@ class RainChanceComplicationService : ComplicationDataSourceService() {
                 ShortTextComplicationData.Builder(
                     text = PlainComplicationText.Builder(rainChance).build(),
                     contentDescription = PlainComplicationText.Builder("Chance of Rain").build()
-                ).setTapAction(pendingIntent).build()
+                )
+                .setTitle(PlainComplicationText.Builder("🌧️").build())
+                .setTapAction(pendingIntent)
+                .build()
             }
             ComplicationType.RANGED_VALUE -> {
                 val value = rainChance.filter { it.isDigit() }.toFloatOrNull() ?: 0f
@@ -42,7 +45,7 @@ class RainChanceComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("Chance of Rain").build()
                 )
                 .setText(PlainComplicationText.Builder(rainChance).build())
-                .setTitle(PlainComplicationText.Builder("Rain").build())
+                .setTitle(PlainComplicationText.Builder("🌧️").build())
                 .setColorRamp(ColorRamp(intArrayOf(color), true))
                 .setTapAction(pendingIntent)
                 .build()
@@ -58,7 +61,9 @@ class RainChanceComplicationService : ComplicationDataSourceService() {
                 ShortTextComplicationData.Builder(
                     text = PlainComplicationText.Builder("15%").build(),
                     contentDescription = PlainComplicationText.Builder("Chance of Rain").build()
-                ).build()
+                )
+                .setTitle(PlainComplicationText.Builder("🌧️").build())
+                .build()
             }
             ComplicationType.RANGED_VALUE -> {
                 RangedValueComplicationData.Builder(
@@ -68,7 +73,7 @@ class RainChanceComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("Chance of Rain").build()
                 )
                 .setText(PlainComplicationText.Builder("15%").build())
-                .setTitle(PlainComplicationText.Builder("Rain").build())
+                .setTitle(PlainComplicationText.Builder("🌧️").build())
                 .build()
             }
             else -> null

@@ -30,7 +30,10 @@ class WindComplicationService : ComplicationDataSourceService() {
                 ShortTextComplicationData.Builder(
                     text = PlainComplicationText.Builder(wind).build(),
                     contentDescription = PlainComplicationText.Builder("Wind Speed").build()
-                ).setTapAction(pendingIntent).build()
+                )
+                .setTitle(PlainComplicationText.Builder("🌬️").build())
+                .setTapAction(pendingIntent)
+                .build()
             }
             ComplicationType.RANGED_VALUE -> {
                 val value = wind.filter { it.isDigit() }.toFloatOrNull() ?: 0f
@@ -41,7 +44,7 @@ class WindComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("Wind Speed").build()
                 )
                 .setText(PlainComplicationText.Builder(wind).build())
-                .setTitle(PlainComplicationText.Builder("Wind").build())
+                .setTitle(PlainComplicationText.Builder("🌬️").build())
                 .setTapAction(pendingIntent)
                 .build()
             }
@@ -56,7 +59,9 @@ class WindComplicationService : ComplicationDataSourceService() {
                 ShortTextComplicationData.Builder(
                     text = PlainComplicationText.Builder("12 mph").build(),
                     contentDescription = PlainComplicationText.Builder("Wind Speed").build()
-                ).build()
+                )
+                .setTitle(PlainComplicationText.Builder("🌬️").build())
+                .build()
             }
             ComplicationType.RANGED_VALUE -> {
                 RangedValueComplicationData.Builder(
@@ -66,7 +71,7 @@ class WindComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("Wind Speed").build()
                 )
                 .setText(PlainComplicationText.Builder("12 mph").build())
-                .setTitle(PlainComplicationText.Builder("Wind").build())
+                .setTitle(PlainComplicationText.Builder("🌬️").build())
                 .build()
             }
             else -> null
