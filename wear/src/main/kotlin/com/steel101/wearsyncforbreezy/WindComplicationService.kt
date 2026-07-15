@@ -3,6 +3,8 @@ package com.steel101.wearsyncforbreezy
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.text.SpannableString
+import android.text.style.RelativeSizeSpan
 
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
@@ -19,6 +21,9 @@ class WindComplicationService : ComplicationDataSourceService() {
     ) {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
         val wind = prefs.getString("wind_only", prefs.getString("wind", "--")) ?: "--"
+        val iconSpannable = SpannableString("🌬️").apply {
+            setSpan(RelativeSizeSpan(0.8f), 0, length, 0)
+        }
 
         val intent = Intent(this, MainActivity::class.java).apply {
             putExtra("EXTRA_TILE_TARGET", "WIND")
@@ -31,7 +36,7 @@ class WindComplicationService : ComplicationDataSourceService() {
                     text = PlainComplicationText.Builder(wind).build(),
                     contentDescription = PlainComplicationText.Builder("Wind Speed").build()
                 )
-                .setTitle(PlainComplicationText.Builder("🌬️").build())
+                .setTitle(PlainComplicationText.Builder(iconSpannable).build())
                 .setTapAction(pendingIntent)
                 .build()
             }
@@ -44,7 +49,7 @@ class WindComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("Wind Speed").build()
                 )
                 .setText(PlainComplicationText.Builder(wind).build())
-                .setTitle(PlainComplicationText.Builder("🌬️").build())
+                .setTitle(PlainComplicationText.Builder(iconSpannable).build())
                 .setTapAction(pendingIntent)
                 .build()
             }

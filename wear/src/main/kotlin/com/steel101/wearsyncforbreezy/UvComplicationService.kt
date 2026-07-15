@@ -3,6 +3,8 @@ package com.steel101.wearsyncforbreezy
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.text.SpannableString
+import android.text.style.RelativeSizeSpan
 import androidx.wear.watchface.complications.data.ColorRamp
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
@@ -19,6 +21,9 @@ class UvComplicationService : ComplicationDataSourceService() {
     ) {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
         val uv = prefs.getString("uv", "--") ?: "--"
+        val iconSpannable = SpannableString("☀️").apply {
+            setSpan(RelativeSizeSpan(0.8f), 0, length, 0)
+        }
 
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -29,7 +34,7 @@ class UvComplicationService : ComplicationDataSourceService() {
                     text = PlainComplicationText.Builder(uv).build(),
                     contentDescription = PlainComplicationText.Builder("UV Index").build()
                 )
-                .setTitle(PlainComplicationText.Builder("☀️").build())
+                .setTitle(PlainComplicationText.Builder(iconSpannable).build())
                 .setTapAction(pendingIntent)
                 .build()
             }
@@ -43,7 +48,7 @@ class UvComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("UV Index").build()
                 )
                 .setText(PlainComplicationText.Builder(uv).build())
-                .setTitle(PlainComplicationText.Builder("☀️").build())
+                .setTitle(PlainComplicationText.Builder(iconSpannable).build())
                 .setColorRamp(ColorRamp(intArrayOf(color), true))
                 .setTapAction(pendingIntent)
                 .build()

@@ -3,6 +3,8 @@ package com.steel101.wearsyncforbreezy
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.text.SpannableString
+import android.text.style.RelativeSizeSpan
 
 import androidx.wear.watchface.complications.data.ColorRamp
 import androidx.wear.watchface.complications.data.ComplicationData
@@ -21,6 +23,9 @@ class WeatherComplicationService : ComplicationDataSourceService() {
         val prefs = getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
         val temp = prefs.getString("temp", "--") ?: "--"
         val conditionIcon = prefs.getString("cond_icon", "☀️") ?: "☀️"
+        val iconSpannable = SpannableString(conditionIcon).apply {
+            setSpan(RelativeSizeSpan(0.8f), 0, length, 0)
+        }
 
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -31,7 +36,7 @@ class WeatherComplicationService : ComplicationDataSourceService() {
                     text = PlainComplicationText.Builder(temp).build(),
                     contentDescription = PlainComplicationText.Builder("Current Temperature").build()
                 )
-                .setTitle(PlainComplicationText.Builder(conditionIcon).build())
+                .setTitle(PlainComplicationText.Builder(iconSpannable).build())
                 .setTapAction(pendingIntent)
                 .build()
             }
@@ -45,7 +50,7 @@ class WeatherComplicationService : ComplicationDataSourceService() {
                     contentDescription = PlainComplicationText.Builder("Current Temperature").build()
                 )
                 .setText(PlainComplicationText.Builder(temp).build())
-                .setTitle(PlainComplicationText.Builder(conditionIcon).build())
+                .setTitle(PlainComplicationText.Builder(iconSpannable).build())
                 .setColorRamp(ColorRamp(intArrayOf(color), true))
                 .setTapAction(pendingIntent)
                 .build()
