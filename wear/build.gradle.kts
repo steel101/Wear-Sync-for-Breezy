@@ -26,8 +26,8 @@ android {
         applicationId = "com.steel101.wearsyncforbreezy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 29
-        versionName = "1.0.65"
+        versionCode = 30
+        versionName = "1.0.66"
         resConfigs("en")
         vectorDrawables {
             useSupportLibrary = true
