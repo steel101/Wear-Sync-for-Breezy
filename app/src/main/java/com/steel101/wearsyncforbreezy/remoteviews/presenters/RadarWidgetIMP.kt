@@ -8,6 +8,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import com.steel101.wearsyncforbreezy.MainActivity
@@ -23,6 +24,7 @@ import kotlin.math.ln
 import kotlin.math.tan
 
 object RadarWidgetIMP {
+    private const val TAG = "RadarWidgetIMP"
 
     fun isInUse(context: Context): Boolean {
         return AppWidgetManager.getInstance(context).getAppWidgetIds(
@@ -31,14 +33,17 @@ object RadarWidgetIMP {
     }
 
     suspend fun updateWidgetView(context: Context, latitude: Double, longitude: Double, cityName: String) {
+        Log.d(TAG, "updateWidgetView for $cityName at $latitude, $longitude")
         val appWidgetManager = AppWidgetManager.getInstance(context)
         val componentName = ComponentName(context, WidgetRadarProvider::class.java)
         val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
 
-        if (appWidgetIds.isEmpty()) return
+        if (appWidgetIds.isEmpty()) {
+            Log.d(TAG, "No widget IDs found, skipping update")
+            return
+        }
 
         val views = RemoteViews(context.packageName, R.layout.widget_radar)
-
         views.setViewVisibility(R.id.widget_radar_progress, View.VISIBLE)
         views.setTextViewText(R.id.widget_radar_title, cityName)
         appWidgetManager.partiallyUpdateAppWidget(appWidgetIds, views)
@@ -46,7 +51,10 @@ object RadarWidgetIMP {
         val bitmap = renderRadarSnapshot(context, latitude, longitude, 7, "Satellite")
         withContext(Dispatchers.Main) {
             if (bitmap != null) {
+                Log.d(TAG, "Radar bitmap rendered successfully, size: ${bitmap.width}x${bitmap.height}")
                 views.setImageViewBitmap(R.id.widget_radar_image, bitmap)
+            } else {
+                Log.e(TAG, "Failed to render radar bitmap")
             }
             views.setViewVisibility(R.id.widget_radar_progress, View.GONE)
             views.setTextViewText(R.id.widget_radar_title, cityName)
@@ -56,18 +64,24 @@ object RadarWidgetIMP {
             views.setOnClickPendingIntent(R.id.widget_radar_root, pendingIntent)
             
             appWidgetManager.updateAppWidget(appWidgetIds, views)
-
-            com.steel101.wearsyncforbreezy.background.weather.RadarUpdateWorker.setupTask(context)
         }
     }
 
     private suspend fun renderRadarSnapshot(context: Context, latitude: Double, longitude: Double, zoom: Int, mapStyle: String): Bitmap? {
         return try {
             val radarData = RadarUtils.fetchRadarMetadata("radar")
-            val hostUrl = radarData?.first ?: ""
-            val frames = radarData?.second ?: emptyList()
+            if (radarData == null) {
+                Log.e(TAG, "Could not fetch radar metadata for widget")
+                return null
+            }
+            val hostUrl = radarData.first
+            val frames = radarData.second
             val recentFrame = frames.lastOrNull { !it.isForecast } ?: frames.firstOrNull()
-            val path = recentFrame?.path ?: ""
+            if (recentFrame == null) {
+                Log.e(TAG, "No radar frames found for widget")
+                return null
+            }
+            val path = recentFrame.path
 
             val numTiles = 1 shl zoom
             val xFrac = (longitude + 180.0) / 360.0 * numTiles
@@ -134,7 +148,8 @@ object RadarWidgetIMP {
             canvas.drawCircle(256f, 256f, 10f, markerPaint)
 
             resultBitmap
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in renderRadarSnapshot: ${e.message}", e)
             null
         }
     }

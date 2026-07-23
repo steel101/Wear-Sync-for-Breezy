@@ -358,28 +358,26 @@ fun LiveRadarMap(
             }
 
             val alpha = radarAlpha.value
-            if (activeLayer == "radar" || activeLayer == "combined") {
-                if (alpha < 1f && outgoingPath.isNotEmpty()) {
-                    prevOverlays.forEach { info ->
-                        for (wrap in -1..1) {
-                            val drawX = (center.x.toDouble() + (info.x0 + wrap * 256.0 - xCenterNormalized) * currentScale).toFloat()
-                            val drawY = (center.y.toDouble() + (info.y0 - yCenterNormalized) * currentScale).toFloat()
-                            val drawSize = (info.size * currentScale).toFloat()
-                            if (drawX + drawSize > 0 && drawX < width && drawY + drawSize > 0 && drawY < height) {
-                                drawImage(info.bitmap, dstOffset = IntOffset(drawX.roundToInt(), drawY.roundToInt()), dstSize = IntSize(drawSize.roundToInt(), drawSize.roundToInt()), alpha = radarOpacity * (1f - alpha), filterQuality = FilterQuality.Medium)
-                            }
+            if (alpha < 1f && outgoingPath.isNotEmpty()) {
+                prevOverlays.forEach { info ->
+                    for (wrap in -1..1) {
+                        val drawX = (center.x.toDouble() + (info.x0 + wrap * 256.0 - xCenterNormalized) * currentScale).toFloat()
+                        val drawY = (center.y.toDouble() + (info.y0 - yCenterNormalized) * currentScale).toFloat()
+                        val drawSize = (info.size * currentScale).toFloat()
+                        if (drawX + drawSize > 0 && drawX < width && drawY + drawSize > 0 && drawY < height) {
+                            drawImage(info.bitmap, dstOffset = IntOffset(drawX.roundToInt(), drawY.roundToInt()), dstSize = IntSize(drawSize.roundToInt(), drawSize.roundToInt()), alpha = radarOpacity * (1f - alpha), filterQuality = FilterQuality.Medium)
                         }
                     }
                 }
-                if (alpha > 0f && activePath.isNotEmpty()) {
-                    visibleOverlays.forEach { info ->
-                        for (wrap in -1..1) {
-                            val drawX = (center.x.toDouble() + (info.x0 + wrap * 256.0 - xCenterNormalized) * currentScale).toFloat()
-                            val drawY = (center.y.toDouble() + (info.y0 - yCenterNormalized) * currentScale).toFloat()
-                            val drawSize = (info.size * currentScale).toFloat()
-                            if (drawX + drawSize > 0 && drawX < width && drawY + drawSize > 0 && drawY < height) {
-                                drawImage(info.bitmap, dstOffset = IntOffset(drawX.roundToInt(), drawY.roundToInt()), dstSize = IntSize(drawSize.roundToInt(), drawSize.roundToInt()), alpha = radarOpacity * alpha, filterQuality = FilterQuality.Medium)
-                            }
+            }
+            if (alpha > 0f && activePath.isNotEmpty()) {
+                visibleOverlays.forEach { info ->
+                    for (wrap in -1..1) {
+                        val drawX = (center.x.toDouble() + (info.x0 + wrap * 256.0 - xCenterNormalized) * currentScale).toFloat()
+                        val drawY = (center.y.toDouble() + (info.y0 - yCenterNormalized) * currentScale).toFloat()
+                        val drawSize = (info.size * currentScale).toFloat()
+                        if (drawX + drawSize > 0 && drawX < width && drawY + drawSize > 0 && drawY < height) {
+                            drawImage(info.bitmap, dstOffset = IntOffset(drawX.roundToInt(), drawY.roundToInt()), dstSize = IntSize(drawSize.roundToInt(), drawSize.roundToInt()), alpha = radarOpacity * alpha, filterQuality = FilterQuality.Medium)
                         }
                     }
                 }
