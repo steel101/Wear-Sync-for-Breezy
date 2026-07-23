@@ -1,4 +1,4 @@
-From now on I will only work on fix and patch the floss flovor I don't see the need to keep 2 apps working when the floss app works just fine now if the Google watch app gets an update will only happen if I have to edit something in the shared folder since that will update both flavors but more of the floss code is now in the floss app folder not the shared if you think I should keep working on the Google flovor let me know why in a issue 
+ 
 
 # ☀️ Wear Sync for Breezy
 
