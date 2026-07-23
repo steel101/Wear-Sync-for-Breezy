@@ -1,1 +1,1 @@
-Added radar on phone app and watch app 
+Added interactive phone radar and a phone radar widget. Added watch radar support featuring an interactive multi-zoom view.
