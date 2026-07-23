@@ -82,73 +82,63 @@ class FossBluetoothPhoneListenerService : Service() {
         isListenerActive = true
         
         scope.launch {
-            try {
-                while (isRunning) {
-                    val prefs = getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
-                    val modeStr = prefs.getString("sync_mode", SyncMode.AUTO.name)
-                    if (modeStr == SyncMode.MQTT.name) {
-                        Log.d(TAG, "Sync mode is MQTT only, pausing Bluetooth listener")
-                        kotlinx.coroutines.delay(30000)
-                        continue
-                    }
-
-                    val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-                    val adapter = bluetoothManager.adapter
-                    if (adapter == null || !adapter.isEnabled) {
-                        Log.w(TAG, "Bluetooth not available or disabled, waiting...")
-                        kotlinx.coroutines.delay(10000)
-                        continue
-                    }
-
-                    try {
-                        Log.d(TAG, "Starting RFCOMM server for requests...")
-                        serverSocket = adapter.listenUsingInsecureRfcommWithServiceRecord("BreezyFossRequest", REQUEST_UUID)
-                        
-                        while (isRunning) {
-                            val socket = try {
-                                serverSocket?.accept()
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Socket accept failed: ${e.message}")
-                                break
-                            }
-                            if (socket != null) {
-                                handleRequest(socket)
-                            }
-                        }
-                    } catch (e: SecurityException) {
-                        Log.e(TAG, "Bluetooth permission missing: ${e.message}")
-                        kotlinx.coroutines.delay(10000)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error in BT listener loop: ${e.message}")
-                        kotlinx.coroutines.delay(5000)
-                    } finally {
-                        try { serverSocket?.close() } catch (_: Exception) {}
-                        serverSocket = null
-                    }
+            while (isRunning) {
+                val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+                val adapter = bluetoothManager.adapter
+                if (adapter == null || !adapter.isEnabled) {
+                    kotlinx.coroutines.delay(10000); continue
                 }
-            } finally {
-                isListenerActive = false
+
+                try {
+                    serverSocket = adapter.listenUsingInsecureRfcommWithServiceRecord("BreezyFossRequest", REQUEST_UUID)
+                    while (isRunning) {
+                        val socket = serverSocket?.accept()
+                        if (socket != null) handleRequest(socket)
+                    }
+                } catch (e: Exception) {
+                    kotlinx.coroutines.delay(5000)
+                } finally {
+                    try { serverSocket?.close() } catch (_: Exception) {}
+                    serverSocket = null
+                }
             }
+            isListenerActive = false
         }
     }
 
     private fun handleRequest(socket: BluetoothSocket) {
         scope.launch {
             try {
-                Log.d(TAG, "Received FOSS BT refresh request")
-                val device = socket.remoteDevice
-                // Close the request socket immediately to free up the BT stack for the response sync
-                try { socket.close() } catch (_: Exception) {}
+                val input = socket.inputStream
+                val buffer = ByteArray(1024)
+                val out = StringBuilder()
+                var bytesRead: Int
+                while (true) {
+                    bytesRead = try { input.read(buffer) } catch (e: Exception) { -1 }
+                    if (bytesRead <= 0) break
+                    out.append(String(buffer, 0, bytesRead, Charsets.UTF_8))
+                    if (out.contains("\n")) break
+                }
                 
-                // Wait a moment for the watch to switch back to listening mode
+                val payload = out.toString().trim()
+                Log.d(TAG, "Received BT request: $payload")
+                var zoom = 7
+                if (payload.startsWith("ZOOM|")) {
+                    zoom = payload.split("|").getOrNull(1)?.toIntOrNull() ?: 7
+                }
+
+                val device = socket.remoteDevice
+                try { socket.close() } catch (_: Exception) {}
                 delay(1000)
 
                 val locations = BreezyDataFetcher.fetchAllWeatherData(this@FossBluetoothPhoneListenerService)
                 if (locations.isNotEmpty()) {
-                    FossBluetoothSyncManager.syncWeatherToDevice(this@FossBluetoothPhoneListenerService, device, locations)
+                    FossBluetoothSyncManager.syncWeatherToDevice(this@FossBluetoothPhoneListenerService, device, locations, zoom)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error handling BT request: ${e.message}")
+                Log.e(TAG, "BT handle error", e)
+            } finally {
+                try { socket.close() } catch (_: Exception) {}
             }
         }
     }

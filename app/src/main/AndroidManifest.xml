@@ -35,6 +35,24 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.radar.LocalRadarActivity"
+            android:exported="false"
+            android:label="Radar"
+            android:theme="@style/Theme.BreezyWeatherWearOsSync" />
+
+        <receiver
+            android:name=".background.receiver.widget.WidgetRadarProvider"
+            android:exported="true"
+            android:label="Breezy Radar Widget">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_radar_info" />
+        </receiver>
+
     </application>
 
 </manifest>

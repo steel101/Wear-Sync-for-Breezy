@@ -28,6 +28,16 @@ class PhoneDataListenerService : WearableListenerService() {
                     }
                 }
             }
+            "/request_zoom" -> {
+                val zoom = String(messageEvent.data).toIntOrNull() ?: 7
+                scope.launch {
+                    val locations = BreezyDataFetcher.fetchAllWeatherData(this@PhoneDataListenerService)
+                    if (locations.isNotEmpty()) {
+                        SyncProvider.getManager().syncWeather(this@PhoneDataListenerService, locations, zoom = zoom)
+                        Log.d(TAG, "Dynamic zoom sync complete for zoom $zoom")
+                    }
+                }
+            }
             "/version_info" -> {
                 val versionStr = String(messageEvent.data)
                 val version = versionStr.toIntOrNull() ?: -1

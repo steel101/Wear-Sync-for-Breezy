@@ -4,5 +4,5 @@ import android.content.Context
 import org.breezyweather.datasharing.BreezyLocation
 
 interface WeatherSyncManager {
-    suspend fun syncWeather(context: Context, locations: List<BreezyLocation>)
+    suspend fun syncWeather(context: Context, locations: List<BreezyLocation>, zoom: Int = 7)
 }

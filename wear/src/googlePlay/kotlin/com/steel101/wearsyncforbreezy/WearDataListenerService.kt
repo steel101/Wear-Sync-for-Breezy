@@ -96,6 +96,33 @@ class WearDataListenerService : WearableListenerService() {
             saveLocationData(editor, dataMap, "loc_${i}_")
         }
 
+        val radarCount = dataMap.getInt("radar_count", 0)
+        editor.putInt("radar_count", radarCount)
+        scope.launch {
+            if (radarCount > 0) {
+                val jobs = mutableListOf<kotlinx.coroutines.Job>()
+                for (i in 0 until radarCount) {
+                    val asset = dataMap.getAsset("radar_$i")
+                    if (asset != null) {
+                        jobs.add(launch {
+                            val bitmap = loadBitmapFromAsset(asset)
+                            if (bitmap != null) {
+                                saveBitmapToFile(bitmap, "radar_$i.jpg")
+                            }
+                        })
+                    }
+                }
+                kotlinx.coroutines.withTimeoutOrNull(20000) {
+                    jobs.forEach { it.join() }
+                }
+                getSharedPreferences("weather_sync", Context.MODE_PRIVATE).edit()
+                    .putLong("radar_sync_timestamp", System.currentTimeMillis()).apply()
+            } else {
+                getSharedPreferences("weather_sync", Context.MODE_PRIVATE).edit()
+                    .putLong("radar_sync_timestamp", System.currentTimeMillis()).apply()
+            }
+        }
+
         editor.commit()
 
         try {
@@ -105,7 +132,8 @@ class WearDataListenerService : WearableListenerService() {
                 DailyTileService::class.java, AtmosphereTileService::class.java,
                 AirQualityTileService::class.java, UVTileService::class.java,
                 PrecipitationTileService::class.java, WindTileService::class.java,
-                AlertsTileService::class.java, MoonTileService::class.java
+                AlertsTileService::class.java, MoonTileService::class.java,
+                RadarTileService::class.java
             )
             tiles.forEach { updater.requestUpdate(it) }
         } catch (e: Exception) {
@@ -244,6 +272,28 @@ class WearDataListenerService : WearableListenerService() {
             ) {
                 notify(title.hashCode(), builder.build())
             }
+        }
+    }
+
+    private suspend fun loadBitmapFromAsset(asset: com.google.android.gms.wearable.Asset): android.graphics.Bitmap? {
+        return try {
+            val result = Wearable.getDataClient(this).getFdForAsset(asset).await()
+            val inputStream = result.inputStream
+            android.graphics.BitmapFactory.decodeStream(inputStream)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load bitmap from asset", e)
+            null
+        }
+    }
+
+    private fun saveBitmapToFile(bitmap: android.graphics.Bitmap, fileName: String) {
+        try {
+            val file = java.io.File(filesDir, fileName)
+            java.io.FileOutputStream(file).use { out ->
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save bitmap to file", e)
         }
     }
 }

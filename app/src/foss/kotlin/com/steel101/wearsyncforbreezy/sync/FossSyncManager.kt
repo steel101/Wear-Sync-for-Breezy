@@ -7,7 +7,7 @@ import org.breezyweather.datasharing.BreezyLocation
 object FossSyncManager : WeatherSyncManager {
     private const val TAG = "FossSyncManager"
 
-    override suspend fun syncWeather(context: Context, locations: List<BreezyLocation>) {
+    override suspend fun syncWeather(context: Context, locations: List<BreezyLocation>, zoom: Int) {
         val prefs = context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
         val modeStr = prefs.getString("sync_mode", SyncMode.AUTO.name) ?: SyncMode.AUTO.name
         val mode = try { SyncMode.valueOf(modeStr) } catch (e: Exception) { SyncMode.AUTO }
@@ -15,12 +15,12 @@ object FossSyncManager : WeatherSyncManager {
         when (mode) {
             SyncMode.MQTT -> {
                 Log.d(TAG, "Syncing via MQTT mode")
-                MqttFossSyncManager.syncWeather(context, locations)
+                MqttFossSyncManager.syncWeather(context, locations, zoom)
             }
             SyncMode.BLUETOOTH -> {
                 Log.d(TAG, "Syncing via FOSS Bluetooth mode")
                 try {
-                    FossBluetoothSyncManager.syncWeather(context, locations)
+                    FossBluetoothSyncManager.syncWeather(context, locations, zoom)
                 } catch (e: Exception) {
                     Log.e(TAG, "FOSS Bluetooth sync failed", e)
                 }
@@ -28,11 +28,11 @@ object FossSyncManager : WeatherSyncManager {
             SyncMode.AUTO -> {
                 Log.d(TAG, "Syncing via Auto mode (FOSS BT first)")
                 try {
-                    FossBluetoothSyncManager.syncWeather(context, locations)
+                    FossBluetoothSyncManager.syncWeather(context, locations, zoom)
                     Log.d(TAG, "Auto sync: FOSS BT success")
                 } catch (e: Exception) {
                     Log.d(TAG, "Auto sync: FOSS BT failed, falling back to MQTT", e)
-                    MqttFossSyncManager.syncWeather(context, locations)
+                    MqttFossSyncManager.syncWeather(context, locations, zoom)
                 }
             }
         }

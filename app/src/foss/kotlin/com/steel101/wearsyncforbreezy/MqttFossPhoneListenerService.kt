@@ -52,21 +52,18 @@ class MqttFossPhoneListenerService : Service() {
     private fun createNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Breezy Wear Sync")
-            .setContentText("Listening for watch refresh requests...")
+            .setContentText("Listening for watch requests...")
             .setSmallIcon(android.R.drawable.ic_menu_rotate)
             .setOngoing(true)
             .build()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "onStartCommand")
-        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, createNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
             startForeground(NOTIFICATION_ID, createNotification())
         }
-
         startMqtt()
         return START_STICKY
     }
@@ -75,20 +72,10 @@ class MqttFossPhoneListenerService : Service() {
         if (mqttClient != null) return
 
         val prefs = getSharedPreferences("weather_prefs", MODE_PRIVATE)
-        val modeStr = prefs.getString("sync_mode", "AUTO")
-        if (modeStr == "BLUETOOTH") {
-            Log.d(TAG, "Sync mode is Bluetooth only, skipping MQTT listener")
-            return
-        }
-
         val watchId = prefs.getString("watch_id", "")
-        if (watchId.isNullOrEmpty()) {
-            Log.w(TAG, "No Watch ID set, cannot listen for refresh requests")
-            return
-        }
+        if (watchId.isNullOrEmpty()) return
 
         val topic = "weatherapp/request/$watchId"
-
         val client = Mqtt5Client.builder()
             .identifier("phone-listen-" + UUID.randomUUID().toString().take(8))
             .serverHost(BROKER_URL)
@@ -99,34 +86,28 @@ class MqttFossPhoneListenerService : Service() {
         mqttClient = client
 
         client.connect().whenComplete { _, throwable ->
-            if (throwable != null) {
-                Log.e(TAG, "MQTT connect failed for phone listener to $BROKER_URL:$BROKER_PORT", throwable)
-                mqttClient = null
-            } else {
-                Log.d(TAG, "MQTT connected to $BROKER_URL:$BROKER_PORT, subscribing to $topic")
+            if (throwable == null) {
                 client.subscribeWith()
                     .topicFilter(topic)
-                    .callback { _ ->
-                        Log.d(TAG, "Received refresh request on $topic")
+                    .callback { pub ->
+                        val payload = String(pub.payloadAsBytes, Charsets.UTF_8)
+                        Log.d(TAG, "Received MQTT request: $payload")
+                        var zoom = 7
+                        if (payload.startsWith("ZOOM|")) {
+                            zoom = payload.split("|").getOrNull(1)?.toIntOrNull() ?: 7
+                        }
                         scope.launch {
                             try {
                                 val locations = BreezyDataFetcher.fetchAllWeatherData(this@MqttFossPhoneListenerService)
                                 if (locations.isNotEmpty()) {
-                                    SyncProvider.getManager().syncWeather(this@MqttFossPhoneListenerService, locations)
+                                    SyncProvider.getManager().syncWeather(this@MqttFossPhoneListenerService, locations, zoom)
                                 }
                             } catch (e: Exception) {
-                                Log.e(TAG, "Failed to fetch/sync weather on request", e)
+                                Log.e(TAG, "Failed request sync", e)
                             }
                         }
                     }
                     .send()
-                    .whenComplete { subResult, subThrowable ->
-                        if (subThrowable != null) {
-                            Log.e(TAG, "MQTT subscribe failed for $topic", subThrowable)
-                        } else {
-                            Log.d(TAG, "Successfully subscribed to $topic. Result: $subResult")
-                        }
-                    }
             }
         }
     }

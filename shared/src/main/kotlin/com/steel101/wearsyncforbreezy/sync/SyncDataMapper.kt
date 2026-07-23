@@ -17,7 +17,7 @@ object SyncDataMapper {
         data["${prefix}bulletin_next"] = bulletin?.nextHours ?: ""
         
         val current = weather.current
-        val tempUnit = current?.temperature?.temperature?.unit?.uppercase() ?: "F"
+        val tempUnit = current?.temperature?.temperature?.unit?.trim()?.uppercase() ?: "F"
         val fullUnit = "°$tempUnit"
         val currentTemp = current?.temperature?.temperature?.value
         

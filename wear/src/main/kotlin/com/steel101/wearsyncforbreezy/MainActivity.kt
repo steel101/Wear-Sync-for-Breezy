@@ -28,11 +28,17 @@ import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.graphics.BitmapFactory
+import androidx.compose.ui.graphics.asImageBitmap
+import java.io.File
+import androidx.compose.ui.layout.ContentScale
 import androidx.wear.compose.material.dialog.Alert
 import androidx.wear.compose.material.dialog.Dialog
 import com.steel101.wearsyncforbreezy.ui.flavorItems
 import com.steel101.wearsyncforbreezy.ui.onRefreshRequest
+import com.steel101.wearsyncforbreezy.ui.onZoomRequest
 import com.steel101.wearsyncforbreezy.ui.startSyncService
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -69,19 +75,15 @@ fun WearApp(initialTarget: String? = null) {
 
     LaunchedEffect(Unit) {
         val permissions = mutableListOf<String>()
-        
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             permissions.add(android.Manifest.permission.BLUETOOTH_CONNECT)
         }
-        
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             permissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
         }
-
         val neededPermissions = permissions.filter {
             androidx.core.content.ContextCompat.checkSelfPermission(context, it) != android.content.pm.PackageManager.PERMISSION_GRANTED
         }
-
         if (neededPermissions.isNotEmpty()) {
             permissionLauncher.launch(neededPermissions.toTypedArray())
         }
@@ -138,6 +140,7 @@ fun WearApp(initialTarget: String? = null) {
     var selectedHour by remember { mutableStateOf<HourData?>(null) }
     var selectedAlert by remember { mutableStateOf<AlertData?>(null) }
     var selectedNowcast by remember { mutableStateOf<MinutelyData?>(null) }
+    var showRadarAnimation by remember { mutableStateOf(false) }
     var lastSync by remember(refreshTrigger) {
         val ts = prefs.getLong("timestamp", 0)
         mutableStateOf(if (ts > 0) formatTime(ts) else "Never")
@@ -201,7 +204,13 @@ fun WearApp(initialTarget: String? = null) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(conditionIcon, fontSize = 42.sp)
                                 Spacer(Modifier.width(8.dp))
-                                Text(text = temp, fontSize = 38.sp, style = MaterialTheme.typography.display1)
+                                Text(
+                                    text = temp,
+                                    fontSize = 38.sp,
+                                    style = MaterialTheme.typography.display1,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
                             if (condition != "--") {
                                 Text(condition, style = MaterialTheme.typography.title2, textAlign = TextAlign.Center)
@@ -210,6 +219,46 @@ fun WearApp(initialTarget: String? = null) {
                                 Text("H: $tempMax  L: $tempMin", style = MaterialTheme.typography.body2, color = Color.Gray)
                             }
                         }
+                    }
+                }
+
+                item {
+                    val count = prefs.getInt("radar_count", 0)
+                    if (count > 0) {
+                        Card(
+                            onClick = { showRadarAnimation = true },
+                            modifier = Modifier.fillMaxWidth().height(100.dp).padding(horizontal = 4.dp)
+                        ) {
+                            val bitmap = remember(refreshTrigger) {
+                                val file = File(context.filesDir, "radar_${count - 1}.jpg")
+                                if (file.exists()) {
+                                    try { BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap() } catch (e: Exception) { null }
+                                } else null
+                            }
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                if (bitmap != null) {
+                                    androidx.compose.foundation.Image(
+                                        bitmap = bitmap,
+                                        contentDescription = "Radar Map Card",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("📡 Radar Map", color = Color.White, style = MaterialTheme.typography.caption1)
+                                    Text("Tap to view", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.caption2)
+                                }
+                            }
+                        }
+                    } else {
+                        Chip(
+                            onClick = { showRadarAnimation = true },
+                            label = { Text("Radar Map") },
+                            icon = { Text("📡", fontSize = 16.sp) },
+                            colors = ChipDefaults.primaryChipColors(),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                        )
                     }
                 }
 
@@ -280,7 +329,6 @@ fun WearApp(initialTarget: String? = null) {
                     item {
                         val aqiValue = aqi.toIntOrNull() ?: 0
                         val arcColor = Color(if (aqiColor != 0) aqiColor else 0xFF00E400.toInt())
-
                         Card(
                             onClick = {},
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
@@ -320,7 +368,6 @@ fun WearApp(initialTarget: String? = null) {
                             uvValue < 11 -> Color(0xFFFF0000)
                             else -> Color(0xFF8F3F97)
                         }
-
                         Card(
                             onClick = {},
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
@@ -434,7 +481,6 @@ fun WearApp(initialTarget: String? = null) {
                                         Text(hour.temp, style = MaterialTheme.typography.caption2)
                                     }
                                 }
-
                                 if (hourlyForecast.size > 7) {
                                     Spacer(Modifier.height(8.dp))
                                     Chip(
@@ -494,15 +540,126 @@ fun WearApp(initialTarget: String? = null) {
         if (currentHour != null) {
             HourDetailAlert(currentHour) { selectedHour = null }
         }
-
         val currentAlert = selectedAlert
         if (currentAlert != null) {
             AlertDetailAlert(currentAlert) { selectedAlert = null }
         }
-
         val currentNowcast = selectedNowcast
         if (currentNowcast != null) {
             NowcastDetailAlert(currentNowcast) { selectedNowcast = null }
+        }
+        if (showRadarAnimation) {
+            RadarAnimationScreen { showRadarAnimation = false }
+        }
+    }
+}
+
+@Composable
+fun RadarAnimationScreen(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val filesDir = context.filesDir
+    val prefs = remember { context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE) }
+    val scope = rememberCoroutineScope()
+    var currentZoom by remember { mutableStateOf(7) }
+    var refreshTrigger by remember { mutableStateOf(0) }
+    var isWaitingForData by remember { mutableStateOf(false) }
+
+    DisposableEffect(Unit) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "radar_sync_timestamp") {
+                refreshTrigger++
+                isWaitingForData = false
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    LaunchedEffect(isWaitingForData) {
+        if (isWaitingForData) {
+            delay(15000)
+            isWaitingForData = false
+        }
+    }
+
+    val count = prefs.getInt("radar_count", 0)
+    val bitmaps = remember(count, refreshTrigger) {
+        (0 until count).mapNotNull { i ->
+            val file = File(filesDir, "radar_$i.jpg")
+            if (file.exists()) {
+                try { BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap() } catch (e: Exception) { null }
+            } else null
+        }
+    }
+
+    if (bitmaps.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+            if (isWaitingForData) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(indicatorColor = Color.White)
+                    Spacer(Modifier.height(8.dp))
+                    Text(text = "Loading Zoom $currentZoom...", style = MaterialTheme.typography.caption1, color = Color.White)
+                }
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("No Radar Data", style = MaterialTheme.typography.title3)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = onDismiss) { Text("Back") }
+                }
+            }
+        }
+    } else {
+        var currentFrame by remember { mutableStateOf(0) }
+        LaunchedEffect(bitmaps) {
+            while (true) {
+                kotlinx.coroutines.delay(500)
+                currentFrame = (currentFrame + 1) % bitmaps.size
+            }
+        }
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+            androidx.compose.foundation.Image(
+                bitmap = bitmaps[currentFrame % bitmaps.size],
+                contentDescription = "Radar Animation",
+                modifier = Modifier.fillMaxSize().clickable { onDismiss() }
+            )
+            if (isWaitingForData) {
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(indicatorColor = Color.White)
+                        Spacer(Modifier.height(8.dp))
+                        Text(text = "Loading Zoom $currentZoom...", style = MaterialTheme.typography.caption1, color = Color.White)
+                    }
+                }
+            }
+            Column(
+                modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = {
+                        if (currentZoom < 12) {
+                            currentZoom++; isWaitingForData = true
+                            onZoomRequest(context, scope, currentZoom)
+                        }
+                    },
+                    modifier = Modifier.size(40.dp),
+                    colors = ButtonDefaults.buttonColors(backgroundColor = Color.Black.copy(alpha = 0.6f))
+                ) {
+                    Text("+", fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                }
+                Button(
+                    onClick = {
+                        if (currentZoom > 4) {
+                            currentZoom--; isWaitingForData = true
+                            onZoomRequest(context, scope, currentZoom)
+                        }
+                    },
+                    modifier = Modifier.size(40.dp),
+                    colors = ButtonDefaults.buttonColors(backgroundColor = Color.Black.copy(alpha = 0.6f))
+                ) {
+                    Text("-", fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                }
+            }
         }
     }
 }
@@ -518,8 +675,8 @@ fun ParameterCard(label: String, value: String) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(label, style = MaterialTheme.typography.caption1, color = Color.LightGray)
-            Text(value, style = MaterialTheme.typography.caption1)
+            Text(label, style = MaterialTheme.typography.caption1, color = Color.LightGray, modifier = Modifier.weight(1f))
+            Text(value, style = MaterialTheme.typography.caption1, maxLines = 1, softWrap = false)
         }
     }
 }
@@ -569,7 +726,7 @@ fun HourDetailAlert(hour: HourData, onDismiss: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                     Text(hour.icon, fontSize = 28.sp)
                     Spacer(Modifier.width(8.dp))
-                    Text(hour.temp, style = MaterialTheme.typography.title1)
+                    Text(hour.temp, style = MaterialTheme.typography.title1, maxLines = 1, softWrap = false)
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(hour.condition, style = MaterialTheme.typography.body1, textAlign = TextAlign.Center)
@@ -616,13 +773,8 @@ fun NowcastDetailAlert(data: MinutelyData, onDismiss: () -> Unit) {
 fun NowcastChart(data: List<MinutelyData>, onClick: (MinutelyData) -> Unit) {
     val maxIntensity = data.maxOfOrNull { it.intensity }?.coerceAtLeast(1.0) ?: 1.0
     val timeFormatter = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(40.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxWidth().height(40.dp)) {
             Row(
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.spacedBy(1.dp),
@@ -631,30 +783,17 @@ fun NowcastChart(data: List<MinutelyData>, onClick: (MinutelyData) -> Unit) {
                 data.forEach { minutely ->
                     val heightFactor = (minutely.intensity / maxIntensity).toFloat()
                     Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable { onClick(minutely) },
+                        modifier = Modifier.weight(1f).fillMaxHeight().clickable { onClick(minutely) },
                         contentAlignment = Alignment.BottomCenter
                     ) {
                         Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(heightFactor.coerceAtLeast(0.05f))
-                                .background(
-                                    if (minutely.intensity > 0) Color(0xFF4A90E2) else Color.Gray.copy(alpha = 0.2f),
-                                    RoundedCornerShape(1.dp)
-                                )
+                            modifier = Modifier.fillMaxWidth().fillMaxHeight(heightFactor.coerceAtLeast(0.05f)).background(if (minutely.intensity > 0) Color(0xFF4A90E2) else Color.Gray.copy(alpha = 0.2f), RoundedCornerShape(1.dp))
                         )
                     }
                 }
             }
         }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             if (data.isNotEmpty()) {
                 Text(timeFormatter.format(Date(data.first().time)), fontSize = 10.sp, color = Color.Gray)
                 Text(timeFormatter.format(Date(data.last().time)), fontSize = 10.sp, color = Color.Gray)

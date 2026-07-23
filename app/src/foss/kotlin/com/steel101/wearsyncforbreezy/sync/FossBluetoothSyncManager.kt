@@ -7,7 +7,10 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
+import android.graphics.Bitmap
+import android.util.Base64
 import android.util.Log
+import com.steel101.wearsyncforbreezy.ui.radar.RadarUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -15,6 +18,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.breezyweather.datasharing.BreezyLocation
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 
@@ -25,49 +29,44 @@ object FossBluetoothSyncManager : WeatherSyncManager {
     private val btMutex = Mutex()
 
     @SuppressLint("MissingPermission")
-    override suspend fun syncWeather(context: Context, locations: List<BreezyLocation>) = withContext(Dispatchers.IO) {
+    override suspend fun syncWeather(context: Context, locations: List<BreezyLocation>, zoom: Int) = withContext(Dispatchers.IO) {
         if (locations.isEmpty()) return@withContext
 
         val adapter = getAdapter(context) ?: throw Exception("Bluetooth unavailable")
-        
-        // Ensure discovery is cancelled to improve connection stability
         try { if (adapter.isDiscovering) adapter.cancelDiscovery() } catch (_: Exception) {}
 
         val pairedDevices = adapter.bondedDevices
         if (pairedDevices.isEmpty()) throw Exception("No paired devices")
 
-        // Prioritize Wearable devices to avoid trying to sync with speakers/cars first
         val sortedDevices = pairedDevices.sortedByDescending { 
             it.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.WEARABLE 
         }
 
-        val payload = buildPayload(locations)
+        val payload = buildPayload(context, locations, zoom)
         var success = false
 
         for (device in sortedDevices) {
             if (trySyncToDevice(context, device, payload)) {
-                success = true
-                break
+                success = true; break
             }
         }
 
-        if (!success) throw Exception("Failed to sync to any paired device via Bluetooth")
-        
+        if (!success) throw Exception("Failed to sync via BT")
         saveSyncTime(context)
     }
 
     @SuppressLint("MissingPermission")
-    suspend fun syncWeatherToDevice(context: Context, device: BluetoothDevice, locations: List<BreezyLocation>) = withContext(Dispatchers.IO) {
+    suspend fun syncWeatherToDevice(context: Context, device: BluetoothDevice, locations: List<BreezyLocation>, zoom: Int) = withContext(Dispatchers.IO) {
         if (locations.isEmpty()) return@withContext
-        val payload = buildPayload(locations)
+        val payload = buildPayload(context, locations, zoom)
         if (trySyncToDevice(context, device, payload)) {
             saveSyncTime(context)
         } else {
-            throw Exception("Failed to sync to requested device ${device.name}")
+            throw Exception("Failed request sync to ${device.name}")
         }
     }
 
-    private fun buildPayload(locations: List<BreezyLocation>): String {
+    private suspend fun buildPayload(context: Context, locations: List<BreezyLocation>, zoom: Int): String {
         val data = JSONObject()
         data.put("location_count", locations.size)
         data.put("timestamp", System.currentTimeMillis())
@@ -80,14 +79,34 @@ object FossBluetoothSyncManager : WeatherSyncManager {
             locData.forEach { (k, v) -> data.put(k, v) }
         }
 
+        // Radar Frames for BT
+        try {
+            val primary = locations[0]
+            RadarUtils.fetchRadarMetadata("radar")?.let { (host, frames) ->
+                val pastFrames = frames.filter { !it.isForecast }.takeLast(5)
+                val staticTiles = RadarUtils.getBaseAndLabelTiles(context, primary.longitude, primary.latitude, zoom, "Satellite")
+                var count = 0
+                pastFrames.forEachIndexed { idx, frame ->
+                    RadarUtils.getCompositedRadarBitmap(context, host, frame, primary.longitude, primary.latitude, zoom, "Satellite", staticTiles)?.let { bmp ->
+                        val stream = ByteArrayOutputStream()
+                        bmp.compress(Bitmap.CompressFormat.JPEG, 80, stream)
+                        val b64 = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
+                        data.put("radar_$idx", b64)
+                        count++
+                    }
+                }
+                data.put("radar_count", count)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Radar BT sync build failed", e)
+        }
+
         return data.toString() + "\n"
     }
 
     private fun saveSyncTime(context: Context) {
-        context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
-            .edit()
-            .putLong("last_sync_time", System.currentTimeMillis())
-            .apply()
+        context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE).edit()
+            .putLong("last_sync_time", System.currentTimeMillis()).apply()
     }
 
     private fun getAdapter(context: Context): BluetoothAdapter? {
@@ -104,27 +123,19 @@ object FossBluetoothSyncManager : WeatherSyncManager {
                 socket.outputStream.write(payload.toByteArray(Charsets.UTF_8))
                 socket.outputStream.flush()
                 
-                // Read ACK and Watch Version from watch
                 try {
                     val reader = socket.inputStream.bufferedReader()
                     val response = reader.readLine()
                     if (response?.startsWith("VER|") == true) {
                         val watchVersion = response.substringAfter("VER|").toIntOrNull() ?: -1
                         if (watchVersion > 0) {
-                            context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
-                                .edit()
-                                .putInt("watch_version_code", watchVersion)
-                                .apply()
-                            Log.d(TAG, "Watch reported version: $watchVersion")
+                            context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE).edit()
+                                .putInt("watch_version_code", watchVersion).apply()
                         }
                     }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to read version ACK from watch: ${e.message}")
-                }
-                
+                } catch (e: Exception) {}
                 true
             } catch (e: Exception) {
-                Log.e(TAG, "Sync failed for ${device.name}: ${e.message}")
                 false
             } finally {
                 try { socket?.close() } catch (_: Exception) {}
@@ -135,22 +146,13 @@ object FossBluetoothSyncManager : WeatherSyncManager {
     @SuppressLint("MissingPermission")
     suspend fun sendApkToWatch(context: Context, apkFile: File, onProgress: (Int) -> Unit = {}): Boolean = withContext(Dispatchers.IO) {
         val adapter = getAdapter(context) ?: return@withContext false
-        val devices = adapter.bondedDevices
-        if (devices.isEmpty()) return@withContext false
-
-        // Prioritize Wearable devices
-        val sortedDevices = devices.sortedByDescending { 
+        val sortedDevices = adapter.bondedDevices.sortedByDescending { 
             it.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.WEARABLE 
         }
-
-        var success = false
         for (device in sortedDevices) {
-            if (trySendFile(device, apkFile, onProgress)) {
-                success = true
-                break
-            }
+            if (trySendFile(device, apkFile, onProgress)) return@withContext true
         }
-        success
+        false
     }
 
     @SuppressLint("MissingPermission")
@@ -159,61 +161,26 @@ object FossBluetoothSyncManager : WeatherSyncManager {
             var socket: BluetoothSocket? = null
             var fileIn: java.io.FileInputStream? = null
             try {
-                Log.d(TAG, "Starting BT APK transfer to ${device.name} (file size: ${file.length()})")
-                
                 socket = connectWithRetry(device, FILE_TRANSFER_UUID)
                 val out = socket.outputStream
-                
-                // Stabilization delay
                 delay(1000)
-
                 fileIn = file.inputStream()
-                
-                // 1. Send Header: NAME|SIZE\n (Trimmed and clean)
-                val header = "${file.name}|${file.length()}\n"
-                out.write(header.toByteArray(Charsets.UTF_8))
+                out.write("${file.name}|${file.length()}\n".toByteArray(Charsets.UTF_8))
                 out.flush()
-                
-                // Small delay to allow watch to process header before binary data hits
                 delay(500)
-
-                // 2. Send Data
-                val buffer = ByteArray(16384) // Larger buffer
+                val buffer = ByteArray(16384)
                 var bytesRead: Int
                 var totalSent = 0L
                 val fileSize = file.length()
-                
-                if (fileSize == 0L) throw Exception("APK file is empty")
-
                 while (fileIn.read(buffer).also { bytesRead = it } != -1) {
                     out.write(buffer, 0, bytesRead)
                     totalSent += bytesRead
-                    // Progress logging and callback
-                    val progressStep = (fileSize / 100).coerceAtLeast(1)
-                    if (totalSent % progressStep < buffer.size || totalSent == fileSize) {
-                        val percent = (totalSent * 100 / fileSize).toInt()
-                        Log.d(TAG, "Sent: $percent% ($totalSent / $fileSize)")
-                        withContext(Dispatchers.Main) {
-                            onProgress(percent)
-                        }
-                    }
+                    withContext(Dispatchers.Main) { onProgress((totalSent * 100 / fileSize).toInt()) }
                 }
                 out.flush()
-                
-                Log.d(TAG, "All data sent, waiting for watch ACK...")
-                // Wait for watch to acknowledge receipt
-                try {
-                    val ack = socket.inputStream.read()
-                    Log.d(TAG, "Received watch ACK: $ack")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Did not receive ACK from watch, closing anyway: ${e.message}")
-                    delay(1000)
-                }
-
-                Log.d(TAG, "BT APK transfer complete")
+                try { socket.inputStream.read() } catch (e: Exception) { delay(1000) }
                 true
             } catch (e: Exception) {
-                Log.e(TAG, "BT APK transfer failed for ${device.name}: ${e.message}", e)
                 false
             } finally {
                 try { fileIn?.close() } catch (_: Exception) {}
@@ -224,56 +191,21 @@ object FossBluetoothSyncManager : WeatherSyncManager {
 
     @SuppressLint("MissingPermission")
     private suspend fun connectWithRetry(device: BluetoothDevice, uuid: UUID): BluetoothSocket {
-        var lastException: Exception = Exception("Failed to connect to ${device.name}")
-        
+        var lastException: Exception = Exception("BT Connect error")
         val adapter = BluetoothAdapter.getDefaultAdapter()
-        
-        // Strategy 1: Insecure RFCOMM (standard) - Faster retry
         for (attempt in 1..2) {
             try {
-                Log.d(TAG, "Connect attempt $attempt (insecure) to ${device.name}")
-                if (adapter?.isDiscovering == true) {
-                    adapter.cancelDiscovery()
-                    delay(200) // Reduced delay
-                }
+                if (adapter?.isDiscovering == true) adapter.cancelDiscovery()
                 val socket = device.createInsecureRfcommSocketToServiceRecord(uuid)
                 socket.connect()
                 return socket
-            } catch (e: Exception) {
-                lastException = e
-                Log.w(TAG, "Insecure attempt $attempt failed: ${e.message}")
-                delay(300) // Reduced delay
-            }
+            } catch (e: Exception) { lastException = e; delay(300) }
         }
-
-        // Strategy 2: Secure RFCOMM fallback
         try {
-            Log.d(TAG, "Connect (secure) to ${device.name}")
             val socket = device.createRfcommSocketToServiceRecord(uuid)
             socket.connect()
             return socket
-        } catch (e: Exception) {
-            lastException = e
-            Log.w(TAG, "Secure attempt failed: ${e.message}")
-        }
-
-        // Strategy 3: Reflection fallback (last resort)
-        try {
-            Log.d(TAG, "Connect attempt (reflection) to ${device.name}")
-            val m = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
-            val socket = m.invoke(device, 1) as BluetoothSocket
-            socket.connect()
-            return socket
-        } catch (e: Exception) {
-            Log.w(TAG, "Reflection attempt failed: ${e.message}")
-        }
-
+        } catch (e: Exception) { lastException = e }
         throw lastException
-    }
-
-    @SuppressLint("MissingPermission")
-    suspend fun isBluetoothConnected(context: Context): Boolean {
-        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        return bluetoothManager.adapter?.bondedDevices?.isNotEmpty() == true
     }
 }

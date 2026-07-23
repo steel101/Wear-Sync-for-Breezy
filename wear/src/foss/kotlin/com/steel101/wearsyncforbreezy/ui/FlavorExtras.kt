@@ -145,10 +145,29 @@ fun onRefreshRequest(context: Context, scope: CoroutineScope) {
     }
 }
 
+fun onZoomRequest(context: Context, scope: CoroutineScope, zoom: Int) {
+    val prefs = context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE)
+    val modeStr = prefs.getString("sync_mode", SyncMode.AUTO.name) ?: SyncMode.AUTO.name
+    val mode = try { SyncMode.valueOf(modeStr) } catch (e: Exception) { SyncMode.AUTO }
+
+    scope.launch {
+        when (mode) {
+            SyncMode.MQTT -> sendMqttRefresh(context, zoom)
+            SyncMode.BLUETOOTH -> sendFossBluetoothRefresh(context, zoom)
+            SyncMode.AUTO -> {
+                val success = sendFossBluetoothRefresh(context, zoom)
+                if (!success) {
+                    sendMqttRefresh(context, zoom)
+                }
+            }
+        }
+    }
+}
+
 private val REQUEST_UUID: UUID = UUID.fromString("d3b8e5c1-2a1f-4b3e-8c4d-5e6f7a8b9c0d")
 
 @SuppressLint("MissingPermission")
-private suspend fun sendFossBluetoothRefresh(context: Context): Boolean = withContext(Dispatchers.IO) {
+private suspend fun sendFossBluetoothRefresh(context: Context, zoom: Int? = null): Boolean = withContext(Dispatchers.IO) {
     return@withContext try {
         val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         val adapter = bluetoothManager.adapter
@@ -158,39 +177,48 @@ private suspend fun sendFossBluetoothRefresh(context: Context): Boolean = withCo
         var success = false
         for (device in pairedDevices) {
             try {
-                Log.d("FlavorExtras", "Requesting FOSS BT refresh from ${device.name} (insecure)")
+                Log.d("FlavorExtras", "Requesting FOSS BT refresh from ${device.name} with zoom $zoom")
                 val socket = device.createInsecureRfcommSocketToServiceRecord(REQUEST_UUID)
                 socket.connect()
+                if (zoom != null) {
+                    socket.outputStream.write("ZOOM|$zoom\n".toByteArray(Charsets.UTF_8))
+                    socket.outputStream.flush()
+                } else {
+                    socket.outputStream.write("REFRESH\n".toByteArray(Charsets.UTF_8))
+                    socket.outputStream.flush()
+                }
                 kotlinx.coroutines.delay(200)
                 socket.close()
                 success = true
-                Log.d("FlavorExtras", "FOSS BT refresh request sent to ${device.name}")
                 break
             } catch (e: Exception) {
-                Log.d("FlavorExtras", "Insecure refresh request failed, trying secure: ${e.message}")
                 try {
                     val socket = device.createRfcommSocketToServiceRecord(REQUEST_UUID)
                     socket.connect()
+                    if (zoom != null) {
+                        socket.outputStream.write("ZOOM|$zoom\n".toByteArray(Charsets.UTF_8))
+                        socket.outputStream.flush()
+                    } else {
+                        socket.outputStream.write("REFRESH\n".toByteArray(Charsets.UTF_8))
+                        socket.outputStream.flush()
+                    }
                     kotlinx.coroutines.delay(200)
                     socket.close()
                     success = true
-                    Log.d("FlavorExtras", "FOSS BT refresh request (secure) sent to ${device.name}")
                     break
-                } catch (e2: Exception) {
-                    Log.e("FlavorExtras", "All refresh requests failed for ${device.name}")
-                }
+                } catch (e2: Exception) {}
             }
         }
         success
     } catch (e: Exception) {
-        Log.e("FlavorExtras", "FOSS BT refresh request execution failed", e)
         false
     }
 }
 
-private fun sendMqttRefresh(context: Context) {
+private fun sendMqttRefresh(context: Context, zoom: Int? = null) {
     val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
     val watchId = SyncUtils.getHashedWatchId(androidId)
+    val payload = if (zoom != null) "ZOOM|$zoom" else "REFRESH"
     try {
         val client = Mqtt5Client.builder()
             .identifier("watch-req-" + UUID.randomUUID().toString().take(8))
@@ -202,6 +230,7 @@ private fun sendMqttRefresh(context: Context) {
             if (throwable == null) {
                 client.publishWith()
                     .topic("weatherapp/request/$watchId")
+                    .payload(payload.toByteArray(Charsets.UTF_8))
                     .send()
                     .whenComplete { _, _ -> client.disconnect() }
             }

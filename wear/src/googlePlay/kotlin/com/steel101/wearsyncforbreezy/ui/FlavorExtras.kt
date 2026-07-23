@@ -26,3 +26,16 @@ fun onRefreshRequest(context: Context, scope: CoroutineScope) {
         }
     }
 }
+
+fun onZoomRequest(context: Context, scope: CoroutineScope, zoom: Int) {
+    scope.launch {
+        try {
+            val nodes = Wearable.getNodeClient(context).connectedNodes.await()
+            nodes.forEach { node ->
+                Wearable.getMessageClient(context).sendMessage(node.id, "/request_zoom", "$zoom".toByteArray()).await()
+            }
+        } catch (e: Exception) {
+            Log.e("FlavorExtras", "Failed zoom request", e)
+        }
+    }
+}

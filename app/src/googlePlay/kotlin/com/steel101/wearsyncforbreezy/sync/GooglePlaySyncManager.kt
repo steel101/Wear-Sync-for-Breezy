@@ -6,6 +6,7 @@ import android.util.Log
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
+import com.steel101.wearsyncforbreezy.ui.radar.RadarUtils
 import kotlinx.coroutines.tasks.await
 import org.breezyweather.datasharing.BreezyLocation
 import java.io.File
@@ -17,7 +18,7 @@ object GooglePlaySyncManager : WeatherSyncManager {
     private const val PATH_REQUEST_VERSION = "/request_version"
     private const val PATH_APK_DELIVERY = "/wear_apk_delivery"
 
-    override suspend fun syncWeather(context: Context, locations: List<BreezyLocation>) {
+    override suspend fun syncWeather(context: Context, locations: List<BreezyLocation>, zoom: Int) {
         if (locations.isEmpty()) return
         
         try {
@@ -40,6 +41,27 @@ object GooglePlaySyncManager : WeatherSyncManager {
                 putToDataMap(rootMap, locData)
             }
 
+            try {
+                val primary = locations[0]
+                RadarUtils.fetchRadarMetadata("radar")?.let { (host, frames) ->
+                    val pastFrames = frames.filter { !it.isForecast }.takeLast(5)
+                    val baseAndLabelTiles = RadarUtils.getBaseAndLabelTiles(context, primary.longitude, primary.latitude, zoom, "Satellite")
+                    
+                    var savedCount = 0
+                    pastFrames.forEachIndexed { idx, frame ->
+                        val bitmap = RadarUtils.getCompositedRadarBitmap(context, host, frame, primary.longitude, primary.latitude, zoom, "Satellite", baseAndLabelTiles)
+                        bitmap?.let {
+                            val asset = createAssetFromBitmap(it)
+                            rootMap.putAsset("radar_$idx", asset)
+                            savedCount++
+                        }
+                    }
+                    rootMap.putInt("radar_count", savedCount)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Radar sync failed", e)
+            }
+
             val request = putDataMapReq.asPutDataRequest().setUrgent()
             Wearable.getDataClient(context).putDataItem(request).await()
 
@@ -52,9 +74,7 @@ object GooglePlaySyncManager : WeatherSyncManager {
                 .putLong("last_sync_time", System.currentTimeMillis())
                 .apply()
                 
-            Log.d(TAG, "Synced ${locations.size} locations to watch via Google Play")
-            
-            // Periodically request watch version during sync
+            Log.d(TAG, "Synced ${locations.size} locations to watch")
             requestWatchVersion(context)
         } catch (e: Exception) {
             Log.e(TAG, "Sync failed", e)
@@ -85,9 +105,8 @@ object GooglePlaySyncManager : WeatherSyncManager {
                     val channel = channelClient.openChannel(node.id, PATH_APK_DELIVERY).await()
                     channelClient.sendFile(channel, Uri.fromFile(apkFile)).await()
                     sentCount++
-                    Log.d(TAG, "APK push started for node: ${node.displayName}")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to send APK to node ${node.displayName}", e)
+                    Log.e(TAG, "Failed to send APK to ${node.displayName}", e)
                 }
             }
             return sentCount > 0
@@ -108,5 +127,11 @@ object GooglePlaySyncManager : WeatherSyncManager {
                 is Boolean -> dataMap.putBoolean(key, value)
             }
         }
+    }
+
+    private fun createAssetFromBitmap(bitmap: android.graphics.Bitmap): com.google.android.gms.wearable.Asset {
+        val byteStream = java.io.ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, byteStream)
+        return com.google.android.gms.wearable.Asset.createFromBytes(byteStream.toByteArray())
     }
 }

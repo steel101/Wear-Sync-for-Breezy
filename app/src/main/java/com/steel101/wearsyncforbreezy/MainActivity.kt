@@ -36,6 +36,7 @@ import com.steel101.wearsyncforbreezy.ui.checkIfSetupRequired
 import com.steel101.wearsyncforbreezy.ui.startSyncService
 import com.steel101.wearsyncforbreezy.ui.theme.BreezyWeatherWearOsSyncTheme
 import org.breezyweather.datasharing.BreezyLocation
+import androidx.compose.material3.AlertDialog
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -118,6 +119,29 @@ fun WeatherSyncScreen(
         mutableStateOf(prefs.getBoolean("first_launch_setup", true) || flavorChangedToFoss) 
     }
 
+    var showRadarInfo by remember {
+        mutableStateOf(prefs.getBoolean("show_radar_info_v1", true))
+    }
+
+    if (showRadarInfo) {
+        AlertDialog(
+            onDismissRequest = { 
+                showRadarInfo = false
+                prefs.edit().putBoolean("show_radar_info_v1", false).apply()
+            },
+            title = { Text("New Radar Feature!") },
+            text = { Text("You can now view interactive weather radar on both your phone and watch! Tap the 'Open Radar Map' button to get started.") },
+            confirmButton = {
+                Button(onClick = { 
+                    showRadarInfo = false
+                    prefs.edit().putBoolean("show_radar_info_v1", false).apply()
+                }) {
+                    Text("Got it!")
+                }
+            }
+        )
+    }
+
     val watchVersionCode by viewModel.watchVersionCode.collectAsState()
 
     LaunchedEffect(watchVersionCode) {
@@ -195,6 +219,21 @@ fun WeatherSyncScreen(
 
         weatherData?.let { data ->
             WeatherInfoCard(data)
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    com.steel101.wearsyncforbreezy.ui.radar.LocalRadarActivity.start(
+                        context,
+                        data.latitude,
+                        data.longitude,
+                        data.city
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+            ) {
+                Text("Open Radar Map")
+            }
             Spacer(modifier = Modifier.height(16.dp))
             Text(text = watchStatus, fontSize = 14.sp, color = if (watchStatus.contains("Connected")) Color(0xFF4CAF50) else Color.Gray)
             Spacer(modifier = Modifier.height(16.dp))
