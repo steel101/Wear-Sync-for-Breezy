@@ -1,4 +1,4 @@
- 
+new major update added radar to phone and watch app for global coverage 
 
 # ☀️ Wear Sync for Breezy
 
