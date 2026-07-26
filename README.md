@@ -1,4 +1,4 @@
-new major update added radar to phone and watch app for global coverage 
+Added new update for gogole play flovor and floss new major update added radar to phone and watch app for global coverage 
 
 # ☀️ Wear Sync for Breezy
 
