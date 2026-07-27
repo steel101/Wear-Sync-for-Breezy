@@ -1,3 +1,5 @@
+major update added radar to phone and watch app.
+
 Wear Sync for Breezy A lightweight bridge application that syncs detailed weather data from the Breezy Weather Android app to your Wear OS watch.
 
 What it does Breezy Weather is a fantastic open-source weather app, but it doesn't always have a native way to send its rich data to every Wear OS watch face or tile. This app acts as a "sync bridge":
@@ -7,9 +9,6 @@ What it does Breezy Weather is a fantastic open-source weather app, but it doesn
 3. It pushes that data to your connected Wear OS device instantly.
 
 Key Features
-
-* Automatic Background Sync: Updates your watch every 45 minutes automatically.
-•*Real-time Updates: Uses a Content Observer to detect when Breezy Weather refreshes its data and triggers an immediate sync to your watch.
 * Detailed Metrics: Syncs more than just temperature:
     * Current Temp & "Feels Like"
     * Humidity, Pressure, UV Index, and Visibility
@@ -34,10 +33,5 @@ How it works
 * The Service: Runs a START_STICKY background service that listens for system changes and handles the communication with Google Play Services Wearable API.
 * Data Privacy: This app does not have internet access. It only reads data locally from one app on your phone and sends it locally to your own watch.
 
-Requirements
-
-* Android Phone with Breezy Weather installed.
-* Wear OS Watch connected via Bluetooth/WiFi.
-* Google Play Services.
 
 Disclaimer: This is an independent companion app and is not officially affiliated with the main Breezy Weather development team.
