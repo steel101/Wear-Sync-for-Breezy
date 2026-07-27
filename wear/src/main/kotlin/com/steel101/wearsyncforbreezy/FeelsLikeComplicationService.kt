@@ -40,12 +40,17 @@ class FeelsLikeComplicationService : ComplicationDataSourceService() {
                 .build()
             }
             ComplicationType.RANGED_VALUE -> {
-                val value = feelsLike.filter { it.isDigit() || it == '-' }.toFloatOrNull() ?: 0f
+                val value = feelsLike.filter { it.isDigit() || it == '-' || it == '.' }.toFloatOrNull() ?: 0f
+                val (min, max) = when {
+                    feelsLike.contains("C", ignoreCase = true) -> -30f to 50f
+                    feelsLike.contains("K", ignoreCase = true) || feelsLike.contains("kevin", ignoreCase = true) -> 240f to 325f
+                    else -> -20f to 120f
+                }
                 val color = WeatherUtils.getTempColor(feelsLike)
                 RangedValueComplicationData.Builder(
-                    value = value,
-                    min = -20f,
-                    max = 120f,
+                    value = value.coerceIn(min, max),
+                    min = min,
+                    max = max,
                     contentDescription = PlainComplicationText.Builder("Feels Like Temperature").build()
                 )
                 .setText(PlainComplicationText.Builder(feelsLike).build())

@@ -96,23 +96,30 @@ class WearDataListenerService : WearableListenerService() {
             saveLocationData(editor, dataMap, "loc_${i}_")
         }
 
-        val radarCount = dataMap.getInt("radar_count", 0)
-        editor.putInt("radar_count", radarCount)
+        val radarFrameCount = dataMap.getInt("radar_frame_count", 0)
+        editor.putInt("radar_frame_count", radarFrameCount)
+        editor.putInt("radar_count", radarFrameCount) // For Tile compatibility
         scope.launch {
-            if (radarCount > 0) {
+            if (radarFrameCount > 0) {
                 val jobs = mutableListOf<kotlinx.coroutines.Job>()
-                for (i in 0 until radarCount) {
-                    val asset = dataMap.getAsset("radar_$i")
-                    if (asset != null) {
-                        jobs.add(launch {
-                            val bitmap = loadBitmapFromAsset(asset)
-                            if (bitmap != null) {
-                                saveBitmapToFile(bitmap, "radar_$i.jpg")
-                            }
-                        })
+                for (z in 4..12) {
+                    for (i in 0 until radarFrameCount) {
+                        val asset = dataMap.getAsset("radar_${z}_$i")
+                        if (asset != null) {
+                            jobs.add(launch {
+                                val bitmap = loadBitmapFromAsset(asset)
+                                if (bitmap != null) {
+                                    saveBitmapToFile(bitmap, "radar_${z}_$i.jpg")
+                                    // Save zoom 7 as default for tiles
+                                    if (z == 7) {
+                                        saveBitmapToFile(bitmap, "radar_$i.jpg")
+                                    }
+                                }
+                            })
+                        }
                     }
                 }
-                kotlinx.coroutines.withTimeoutOrNull(20000) {
+                kotlinx.coroutines.withTimeoutOrNull(60000) {
                     jobs.forEach { it.join() }
                 }
                 getSharedPreferences("weather_sync", Context.MODE_PRIVATE).edit()

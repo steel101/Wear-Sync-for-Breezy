@@ -12,7 +12,7 @@ import androidx.wear.tiles.RequestBuilders
 import androidx.wear.tiles.TileBuilders
 import androidx.wear.tiles.TileService
 import com.google.common.util.concurrent.ListenableFuture
-import androidx.concurrent.futures.ResolvableFuture
+import androidx.concurrent.futures.CallbackToFutureAdapter
 import java.io.File
 
 class RadarTileService : TileService() {
@@ -71,14 +71,15 @@ class RadarTileService : TileService() {
         }
 
         val tile = TileBuilders.Tile.Builder()
-            .setResourcesVersion(prefs.getLong("radar_sync_timestamp", timestamp).toString())
+            .setResourcesVersion(System.currentTimeMillis().toString())
             .setTileTimeline(rootLayoutBuilder)
-            .setFreshnessIntervalMillis(5 * 60 * 1000)
+            .setFreshnessIntervalMillis(60 * 1000)
             .build()
 
-        val future = ResolvableFuture.create<TileBuilders.Tile>()
-        future.set(tile)
-        return future
+        return CallbackToFutureAdapter.getFuture { completer ->
+            completer.set(tile)
+            "RadarTileService#onTileRequest"
+        }
     }
 
     @SuppressLint("RestrictedApi")
@@ -107,8 +108,9 @@ class RadarTileService : TileService() {
             }
         }
 
-        val future = ResolvableFuture.create<ResourceBuilders.Resources>()
-        future.set(builder.build())
-        return future
+        return CallbackToFutureAdapter.getFuture { completer ->
+            completer.set(builder.build())
+            "RadarTileService#onTileResourcesRequest"
+        }
     }
 }

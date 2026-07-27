@@ -23,13 +23,20 @@ object SyncDataProcessor {
             val key = keys.next()
             val value = json.get(key)
             
-            if (key.startsWith("radar_") && key != "radar_count") {
+            if (key.startsWith("radar_") && key != "radar_count" && key != "radar_frame_count") {
                 try {
                     val b64 = value as String
                     val bytes = Base64.decode(b64, Base64.DEFAULT)
                     val file = File(context.filesDir, "$key.jpg")
                     FileOutputStream(file).use { it.write(bytes) }
-                    Log.d(TAG, "Saved FOSS radar frame: $key")
+                    Log.d(TAG, "Saved radar frame: $key")
+                    
+                    // Legacy/Tile support: if it's zoom 7, also save as radar_$idx.jpg
+                    if (key.startsWith("radar_7_")) {
+                        val idx = key.substringAfterLast("_")
+                        val legacyFile = File(context.filesDir, "radar_$idx.jpg")
+                        FileOutputStream(legacyFile).use { it.write(bytes) }
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to decode radar frame $key", e)
                 }
@@ -43,6 +50,9 @@ object SyncDataProcessor {
                         editor.remove(key); editor.putFloat(key, value.toFloat())
                     } else {
                         editor.putInt(key, value)
+                        if (key == "radar_frame_count") {
+                            editor.putInt("radar_count", value)
+                        }
                     }
                 }
                 is Long -> {

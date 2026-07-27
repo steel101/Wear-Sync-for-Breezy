@@ -41,38 +41,48 @@ object GooglePlaySyncManager : WeatherSyncManager {
                 putToDataMap(rootMap, locData)
             }
 
-            try {
-                val primary = locations[0]
-                RadarUtils.fetchRadarMetadata("radar")?.let { (host, frames) ->
-                    val pastFrames = frames.filter { !it.isForecast }.takeLast(5)
-                    val baseAndLabelTiles = RadarUtils.getBaseAndLabelTiles(context, primary.longitude, primary.latitude, zoom, "Satellite")
-                    
-                    var savedCount = 0
-                    pastFrames.forEachIndexed { idx, frame ->
-                        val bitmap = RadarUtils.getCompositedRadarBitmap(context, host, frame, primary.longitude, primary.latitude, zoom, "Satellite", baseAndLabelTiles)
-                        bitmap?.let {
-                            val asset = createAssetFromBitmap(it)
-                            rootMap.putAsset("radar_$idx", asset)
-                            savedCount++
-                        }
-                    }
-                    rootMap.putInt("radar_count", savedCount)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Radar sync failed", e)
-            }
-
-            val request = putDataMapReq.asPutDataRequest().setUrgent()
-            Wearable.getDataClient(context).putDataItem(request).await()
+            // 1. Sync weather data immediately to the watch for faster updates
+            val weatherRequest = putDataMapReq.asPutDataRequest().setUrgent()
+            Wearable.getDataClient(context).putDataItem(weatherRequest).await()
 
             for (node in nodes) {
                 Wearable.getMessageClient(context).sendMessage(node.id, PATH_FORCE_UPDATE, byteArrayOf(1)).await()
             }
-            
-            context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
-                .edit()
-                .putLong("last_sync_time", System.currentTimeMillis())
-                .apply()
+
+            // 2. Radar frames sync in background to avoid blocking weather data
+            @Suppress("OPT_IN_USAGE")
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val primary = locations[0]
+                    RadarUtils.fetchRadarMetadata("radar")?.let { (host, frames) ->
+                        val pastFrames = frames.filter { !it.isForecast }.takeLast(5)
+                        
+                        rootMap.putInt("radar_frame_count", pastFrames.size)
+
+                        for (z in 4..12) {
+                            val baseAndLabelTiles = RadarUtils.getBaseAndLabelTiles(context, primary.longitude, primary.latitude, z, "Satellite")
+                            pastFrames.forEachIndexed { idx, frame ->
+                                val bitmap = RadarUtils.getCompositedRadarBitmap(context, host, frame, primary.longitude, primary.latitude, z, "Satellite", baseAndLabelTiles)
+                                bitmap?.let {
+                                    val asset = createAssetFromBitmap(it)
+                                    rootMap.putAsset("radar_${z}_$idx", asset)
+                                }
+                            }
+                        }
+
+                        // Send another update with radar frames
+                        val radarRequest = putDataMapReq.asPutDataRequest().setUrgent()
+                        Wearable.getDataClient(context).putDataItem(radarRequest).await()
+
+                        context.getSharedPreferences("weather_prefs", Context.MODE_PRIVATE)
+                            .edit()
+                            .putLong("last_sync_time", System.currentTimeMillis())
+                            .apply()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Background radar sync failed", e)
+                }
+            }
                 
             Log.d(TAG, "Synced ${locations.size} locations to watch")
             requestWatchVersion(context)

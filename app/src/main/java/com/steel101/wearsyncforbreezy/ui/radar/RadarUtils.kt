@@ -27,7 +27,10 @@ import kotlin.math.tan
 data class RadarFrame(
     val time: Long,
     val path: String,
-    val isForecast: Boolean
+    val isForecast: Boolean,
+    val isInterpolated: Boolean = false,
+    val interpolationRatio: Float = 0f,
+    val nextPath: String? = null
 )
 
 data class LightningStrike(

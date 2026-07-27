@@ -5,9 +5,11 @@ import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -42,6 +44,16 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.rotary.onRotaryScrollEvent
+import androidx.wear.compose.foundation.rememberActiveFocusRequester
+import androidx.wear.compose.foundation.ExperimentalWearFoundationApi
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,12 +64,13 @@ class MainActivity : ComponentActivity() {
             Log.e("MainActivity", "Failed to start sync service", e)
         }
         val target = intent.getStringExtra("EXTRA_TILE_TARGET")
-        setContent { WearApp(target) }
+        val openRadar = intent.getBooleanExtra("open_radar", false)
+        setContent { WearApp(target, openRadar) }
     }
 }
 
 @Composable
-fun WearApp(initialTarget: String? = null) {
+fun WearApp(initialTarget: String? = null, openRadarInitial: Boolean = false) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE) }
 
@@ -140,7 +153,7 @@ fun WearApp(initialTarget: String? = null) {
     var selectedHour by remember { mutableStateOf<HourData?>(null) }
     var selectedAlert by remember { mutableStateOf<AlertData?>(null) }
     var selectedNowcast by remember { mutableStateOf<MinutelyData?>(null) }
-    var showRadarAnimation by remember { mutableStateOf(false) }
+    var showRadarAnimation by remember { mutableStateOf(openRadarInitial) }
     var lastSync by remember(refreshTrigger) {
         val ts = prefs.getLong("timestamp", 0)
         mutableStateOf(if (ts > 0) formatTime(ts) else "Never")
@@ -199,7 +212,9 @@ fun WearApp(initialTarget: String? = null) {
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
+                                detectTapGestures(onDoubleTap = { showRadarAnimation = true })
+                            }
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(conditionIcon, fontSize = 42.sp)
@@ -227,7 +242,7 @@ fun WearApp(initialTarget: String? = null) {
                     if (count > 0) {
                         Card(
                             onClick = { showRadarAnimation = true },
-                            modifier = Modifier.fillMaxWidth().height(100.dp).padding(horizontal = 4.dp)
+                            modifier = Modifier.fillMaxWidth().height(120.dp).padding(horizontal = 4.dp)
                         ) {
                             val bitmap = remember(refreshTrigger) {
                                 val file = File(context.filesDir, "radar_${count - 1}.jpg")
@@ -244,7 +259,7 @@ fun WearApp(initialTarget: String? = null) {
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 }
-                                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+                                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)))
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("📡 Radar Map", color = Color.White, style = MaterialTheme.typography.caption1)
                                     Text("Tap to view", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.caption2)
@@ -554,41 +569,53 @@ fun WearApp(initialTarget: String? = null) {
     }
 }
 
+@OptIn(ExperimentalWearFoundationApi::class)
 @Composable
 fun RadarAnimationScreen(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val filesDir = context.filesDir
     val prefs = remember { context.getSharedPreferences("weather_sync", Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
-    var currentZoom by remember { mutableStateOf(7) }
-    var refreshTrigger by remember { mutableStateOf(0) }
+    val focusRequester = rememberActiveFocusRequester()
+
+    var currentZoom by remember { mutableIntStateOf(7) }
+    var refreshTrigger by remember { mutableIntStateOf(0) }
     var isWaitingForData by remember { mutableStateOf(false) }
+    var accumulatedPinch by remember { mutableFloatStateOf(1f) }
+    var accumulatedRotary by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     DisposableEffect(Unit) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == "radar_sync_timestamp") {
                 refreshTrigger++
                 isWaitingForData = false
+                accumulatedPinch = 1f
+                accumulatedRotary = 0f
             }
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
-    LaunchedEffect(isWaitingForData) {
-        if (isWaitingForData) {
-            delay(15000)
-            isWaitingForData = false
-        }
-    }
-
     val count = prefs.getInt("radar_count", 0)
-    val bitmaps = remember(count, refreshTrigger) {
-        (0 until count).mapNotNull { i ->
-            val file = File(filesDir, "radar_$i.jpg")
-            if (file.exists()) {
-                try { BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap() } catch (e: Exception) { null }
-            } else null
+    val bitmaps = remember(currentZoom, refreshTrigger) {
+        val frameCount = prefs.getInt("radar_frame_count", 0)
+        if (frameCount > 0) {
+            (0 until frameCount).mapNotNull { i ->
+                val file = File(filesDir, "radar_${currentZoom}_$i.jpg")
+                if (file.exists()) {
+                    try { BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap() } catch (e: Exception) { null }
+                } else null
+            }
+        } else {
+            (0 until count).mapNotNull { i ->
+                val file = File(filesDir, "radar_$i.jpg")
+                if (file.exists()) {
+                    try { BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap() } catch (e: Exception) { null }
+                } else null
+            }
         }
     }
 
@@ -598,7 +625,7 @@ fun RadarAnimationScreen(onDismiss: () -> Unit) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(indicatorColor = Color.White)
                     Spacer(Modifier.height(8.dp))
-                    Text(text = "Loading Zoom $currentZoom...", style = MaterialTheme.typography.caption1, color = Color.White)
+                    Text(text = "Loading Zoom $currentZoom...", style = MaterialTheme.typography.caption1, color = Color.White, textAlign = TextAlign.Center)
                 }
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -609,57 +636,44 @@ fun RadarAnimationScreen(onDismiss: () -> Unit) {
             }
         }
     } else {
-        var currentFrame by remember { mutableStateOf(0) }
-        LaunchedEffect(bitmaps) {
-            while (true) {
-                kotlinx.coroutines.delay(500)
-                currentFrame = (currentFrame + 1) % bitmaps.size
+        var currentFrame by remember { mutableIntStateOf(0) }
+        val transformState = rememberTransformableState { zoomChange, _, _ ->
+            accumulatedPinch *= zoomChange
+            if (accumulatedPinch > 1.3f && currentZoom < 12) {
+                currentZoom++
+                accumulatedPinch = 1f
+            } else if (accumulatedPinch < 0.75f && currentZoom > 4) {
+                currentZoom--
+                accumulatedPinch = 1f
             }
         }
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+        LaunchedEffect(bitmaps) {
+            while (true) { delay(500); currentFrame = (currentFrame + 1) % bitmaps.size }
+        }
+        Box(
+            modifier = Modifier.fillMaxSize().background(Color.Black)
+                .onRotaryScrollEvent {
+                    accumulatedRotary += it.verticalScrollPixels
+                    if (accumulatedRotary < -80f && currentZoom < 12) {
+                        currentZoom++
+                        accumulatedRotary = 0f
+                    } else if (accumulatedRotary > 80f && currentZoom > 4) {
+                        currentZoom--
+                        accumulatedRotary = 0f
+                    }
+                    true
+                }
+                .focusRequester(focusRequester).focusable().transformable(state = transformState)
+                .pointerInput(Unit) { detectTapGestures(onLongPress = { onDismiss() }) },
+            contentAlignment = Alignment.Center
+        ) {
             androidx.compose.foundation.Image(
                 bitmap = bitmaps[currentFrame % bitmaps.size],
                 contentDescription = "Radar Animation",
-                modifier = Modifier.fillMaxSize().clickable { onDismiss() }
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
-            if (isWaitingForData) {
-                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(indicatorColor = Color.White)
-                        Spacer(Modifier.height(8.dp))
-                        Text(text = "Loading Zoom $currentZoom...", style = MaterialTheme.typography.caption1, color = Color.White)
-                    }
-                }
-            }
-            Column(
-                modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = {
-                        if (currentZoom < 12) {
-                            currentZoom++; isWaitingForData = true
-                            onZoomRequest(context, scope, currentZoom)
-                        }
-                    },
-                    modifier = Modifier.size(40.dp),
-                    colors = ButtonDefaults.buttonColors(backgroundColor = Color.Black.copy(alpha = 0.6f))
-                ) {
-                    Text("+", fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                }
-                Button(
-                    onClick = {
-                        if (currentZoom > 4) {
-                            currentZoom--; isWaitingForData = true
-                            onZoomRequest(context, scope, currentZoom)
-                        }
-                    },
-                    modifier = Modifier.size(40.dp),
-                    colors = ButtonDefaults.buttonColors(backgroundColor = Color.Black.copy(alpha = 0.6f))
-                ) {
-                    Text("-", fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                }
-            }
+            Text(text = "Z$currentZoom Frame ${currentFrame + 1}/${bitmaps.size}", style = MaterialTheme.typography.caption2, color = Color.White, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
         }
     }
 }
@@ -799,17 +813,6 @@ fun NowcastChart(data: List<MinutelyData>, onClick: (MinutelyData) -> Unit) {
                 Text(timeFormatter.format(Date(data.last().time)), fontSize = 10.sp, color = Color.Gray)
             }
         }
-    }
-}
-
-@Composable
-fun DetailRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, style = MaterialTheme.typography.caption1, color = Color.LightGray)
-        Text(value, style = MaterialTheme.typography.caption1)
     }
 }
 

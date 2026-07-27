@@ -41,12 +41,17 @@ class WeatherComplicationService : ComplicationDataSourceService() {
                 .build()
             }
             ComplicationType.RANGED_VALUE -> {
-                val value = temp.filter { it.isDigit() || it == '-' }.toFloatOrNull() ?: 0f
+                val value = temp.filter { it.isDigit() || it == '-' || it == '.' }.toFloatOrNull() ?: 0f
+                val (min, max) = when {
+                    temp.contains("C", ignoreCase = true) -> -30f to 50f
+                    temp.contains("K", ignoreCase = true) || temp.contains("kevin", ignoreCase = true) -> 240f to 325f
+                    else -> -20f to 120f
+                }
                 val color = WeatherUtils.getTempColor(temp)
                 RangedValueComplicationData.Builder(
-                    value = value,
-                    min = -20f,
-                    max = 120f,
+                    value = value.coerceIn(min, max),
+                    min = min,
+                    max = max,
                     contentDescription = PlainComplicationText.Builder("Current Temperature").build()
                 )
                 .setText(PlainComplicationText.Builder(temp).build())

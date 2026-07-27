@@ -84,18 +84,19 @@ object FossBluetoothSyncManager : WeatherSyncManager {
             val primary = locations[0]
             RadarUtils.fetchRadarMetadata("radar")?.let { (host, frames) ->
                 val pastFrames = frames.filter { !it.isForecast }.takeLast(5)
-                val staticTiles = RadarUtils.getBaseAndLabelTiles(context, primary.longitude, primary.latitude, zoom, "Satellite")
-                var count = 0
-                pastFrames.forEachIndexed { idx, frame ->
-                    RadarUtils.getCompositedRadarBitmap(context, host, frame, primary.longitude, primary.latitude, zoom, "Satellite", staticTiles)?.let { bmp ->
-                        val stream = ByteArrayOutputStream()
-                        bmp.compress(Bitmap.CompressFormat.JPEG, 80, stream)
-                        val b64 = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
-                        data.put("radar_$idx", b64)
-                        count++
+                data.put("radar_frame_count", pastFrames.size)
+
+                for (z in 4..12) {
+                    val staticTiles = RadarUtils.getBaseAndLabelTiles(context, primary.longitude, primary.latitude, z, "Satellite")
+                    pastFrames.forEachIndexed { idx, frame ->
+                        RadarUtils.getCompositedRadarBitmap(context, host, frame, primary.longitude, primary.latitude, z, "Satellite", staticTiles)?.let { bmp ->
+                            val stream = ByteArrayOutputStream()
+                            bmp.compress(Bitmap.CompressFormat.JPEG, 70, stream)
+                            val b64 = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
+                            data.put("radar_${z}_$idx", b64)
+                        }
                     }
                 }
-                data.put("radar_count", count)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Radar BT sync build failed", e)

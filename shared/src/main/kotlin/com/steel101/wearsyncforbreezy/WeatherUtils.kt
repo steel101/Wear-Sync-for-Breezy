@@ -45,13 +45,38 @@ object WeatherUtils {
     }
 
     fun getTempColor(tempStr: String): Int {
-        val temp = tempStr.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: return 0xFFFFFFFF.toInt()
+        val temp = tempStr.filter { it.isDigit() || it == '-' || it == '.' }.toFloatOrNull() ?: return 0xFFFFFFFF.toInt()
+        val isCelsius = tempStr.contains("°C") || tempStr.contains("C", ignoreCase = true)
+        val isKelvin = tempStr.contains("K", ignoreCase = true) || tempStr.contains("kevin", ignoreCase = true)
+
         return when {
-            temp <= 32 -> 0xFF448AFF.toInt()
-            temp <= 60 -> 0xFF00E676.toInt()
-            temp <= 85 -> 0xFFFFFF00.toInt()
-            temp <= 95 -> 0xFFFF9800.toInt()
-            else -> 0xFFFF5252.toInt()
+            isCelsius -> {
+                when {
+                    temp <= 0 -> 0xFF448AFF.toInt()
+                    temp <= 15 -> 0xFF00E676.toInt()
+                    temp <= 29 -> 0xFFFFFF00.toInt()
+                    temp <= 35 -> 0xFFFF9800.toInt()
+                    else -> 0xFFFF5252.toInt()
+                }
+            }
+            isKelvin -> {
+                when {
+                    temp <= 273.15 -> 0xFF448AFF.toInt()
+                    temp <= 288.15 -> 0xFF00E676.toInt()
+                    temp <= 302.15 -> 0xFFFFFF00.toInt()
+                    temp <= 308.15 -> 0xFFFF9800.toInt()
+                    else -> 0xFFFF5252.toInt()
+                }
+            }
+            else -> { // Fahrenheit
+                when {
+                    temp <= 32 -> 0xFF448AFF.toInt()
+                    temp <= 60 -> 0xFF00E676.toInt()
+                    temp <= 85 -> 0xFFFFFF00.toInt()
+                    temp <= 95 -> 0xFFFF9800.toInt()
+                    else -> 0xFFFF5252.toInt()
+                }
+            }
         }
     }
 }
