@@ -7,6 +7,9 @@ import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import com.steel101.wearsyncforbreezy.ui.radar.RadarUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import org.breezyweather.datasharing.BreezyLocation
 import java.io.File
@@ -51,7 +54,7 @@ object GooglePlaySyncManager : WeatherSyncManager {
 
             // 2. Radar frames sync in background to avoid blocking weather data
             @Suppress("OPT_IN_USAGE")
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            GlobalScope.launch(Dispatchers.IO) {
                 try {
                     val primary = locations[0]
                     RadarUtils.fetchRadarMetadata("radar")?.let { (host, frames) ->
